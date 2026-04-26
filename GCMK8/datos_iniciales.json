@@ -1,0 +1,23 @@
+{
+  "ventas": [
+    { "fecha": "2025-01-01", "monto": 0, "concepto": "Venta mayorista" },
+    { "fecha": "2025-02-01", "monto": 411702637, "concepto": "Venta regional" }
+    
+  ],
+  "compras": [
+    { "fecha": "2025-01-01", "monto": 0, "concepto": "Compra proveedor A" },
+    { "fecha": "2025-01-02", "monto": 0, "concepto": "Compra proveedor B" },
+    { "fecha": "2025-01-03", "monto": 0, "concepto": "Compra proveedor C" },
+    { "fecha": "2025-01-04", "monto": 0, "concepto": "Compra proveedor D" }
+  ],
+  "gastos": [
+    { "fecha": "2025-01-01", "monto": 0, "concepto": "Alquiler" },
+    { "fecha": "2025-01-02", "monto": 0, "concepto": "Servicios" },
+    { "fecha": "2025-01-03", "monto": 0, "concepto": "Sueldos" },
+    { "fecha": "2025-01-04", "monto": 0, "concepto": "Logística" }
+  ],
+  "saldo_inicial": [
+  { "fecha": "2026-01-01", "monto": 493845904 }
+]
+
+}

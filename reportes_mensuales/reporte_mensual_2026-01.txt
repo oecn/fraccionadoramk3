@@ -1,0 +1,45 @@
+==============================================================================
+REPORTE MENSUAL - Fraccionadora
+==============================================================================
+Periodo: 2026-01 (2026-01-01 a 2026-01-31)
+Generado: 2026-02-09 16:49:43
+Base de datos: C:\Users\osval\Desktop\dev\PDFREADER\GCPDFMK10\GCMK8\fraccionadora.db
+
+RESUMEN CONTABLE
+------------------------------------------------------------------------------
+Ventas facturas (Gs)..................: 72.700.000
+Ventas bolsas (Gs)....................: 0
+VENTAS TOTALES (Gs)...................: 72.700.000
+Compras MP del mes (Gs)...............: 20.200.000
+Gastos del mes (Gs)...................: 18.541.681
+Margen bruto estimado (Gs)............: 52.500.000 (72.2%)
+Beneficio operativo estimado (Gs).....: 33.958.319 (46.7%)
+
+INVENTARIO VALUADO
+------------------------------------------------------------------------------
+Producto terminado (Gs)...............: 58.012.000
+Materia prima (Gs)....................: 2.337.992
+Inventario total (Gs).................: 60.349.992
+
+OPERACION DEL MES
+------------------------------------------------------------------------------
+Cantidad de facturas.................: 6
+Cantidad de ventas de bolsa..........: 0
+
+TOP PRODUCTOS (por venta del mes)
+------------------------------------------------------------------------------
+ 1. Arroz 1000 g | Paq: 530 | Total Gs: 23.850.000
+ 2. Azúcar 500 g | Paq: 410 | Total Gs: 12.095.000
+ 3. Azúcar 1000 g | Paq: 220 | Total Gs: 11.880.000
+ 4. Arroz 500 g | Paq: 420 | Total Gs: 10.500.000
+ 5. Galleta molida 800 g | Paq: 46 | Total Gs: 2.645.000
+ 6. Poroto Rojo 400 g | Paq: 63 | Total Gs: 2.583.000
+ 7. Azúcar 250 g | Paq: 65 | Total Gs: 2.080.000
+ 8. Galleta molida 400 g | Paq: 67 | Total Gs: 2.077.000
+ 9. Lenteja 250 g | Paq: 10 | Total Gs: 1.200.000
+10. Pororó 800 g | Paq: 20 | Total Gs: 1.130.000
+
+NOTA
+------------------------------------------------------------------------------
+Margen/beneficio son estimados contables sobre caja del periodo (ventas - compras - gastos).
+==============================================================================

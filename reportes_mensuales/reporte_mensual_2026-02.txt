@@ -1,0 +1,44 @@
+==============================================================================
+REPORTE MENSUAL - Fraccionadora
+==============================================================================
+Periodo: 2026-02 (2026-02-01 a 2026-02-28)
+Generado: 2026-02-09 16:49:43
+Base de datos: C:\Users\osval\Desktop\dev\PDFREADER\GCPDFMK10\GCMK8\fraccionadora.db
+
+RESUMEN CONTABLE
+------------------------------------------------------------------------------
+Ventas facturas (Gs)..................: 47.339.000
+Ventas bolsas (Gs)....................: 0
+VENTAS TOTALES (Gs)...................: 47.339.000
+Compras MP del mes (Gs)...............: 37.200.000
+Gastos del mes (Gs)...................: 16.335.534
+Margen bruto estimado (Gs)............: 10.139.000 (21.4%)
+Beneficio operativo estimado (Gs).....: -6.196.534 (-13.1%)
+
+INVENTARIO VALUADO
+------------------------------------------------------------------------------
+Producto terminado (Gs)...............: 34.599.500
+Materia prima (Gs)....................: 2.310.492
+Inventario total (Gs).................: 36.909.992
+
+OPERACION DEL MES
+------------------------------------------------------------------------------
+Cantidad de facturas.................: 3
+Cantidad de ventas de bolsa..........: 0
+
+TOP PRODUCTOS (por venta del mes)
+------------------------------------------------------------------------------
+ 1. Azúcar 1000 g | Paq: 250 | Total Gs: 14.125.000
+ 2. Arroz 1000 g | Paq: 290 | Total Gs: 13.050.000
+ 3. Azúcar 250 g | Paq: 170 | Total Gs: 5.729.000
+ 4. Azúcar 500 g | Paq: 180 | Total Gs: 5.400.000
+ 5. Arroz 500 g | Paq: 180 | Total Gs: 4.500.000
+ 6. Arroz 250 g | Paq: 90 | Total Gs: 2.430.000
+ 7. Galleta molida 800 g | Paq: 30 | Total Gs: 1.725.000
+ 8. Galleta molida 400 g | Paq: 10 | Total Gs: 310.000
+ 9. Locrillo 200 g | Paq: 2 | Total Gs: 70.000
+
+NOTA
+------------------------------------------------------------------------------
+Margen/beneficio son estimados contables sobre caja del periodo (ventas - compras - gastos).
+==============================================================================

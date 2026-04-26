@@ -1,0 +1,45 @@
+==============================================================================
+REPORTE MENSUAL - Fraccionadora
+==============================================================================
+Periodo: 2025-11 (2025-11-01 a 2025-11-30)
+Generado: 2026-02-09 16:46:46
+Base de datos: C:\Users\osval\Desktop\dev\PDFREADER\GCPDFMK10\GCMK8\fraccionadora.db
+
+RESUMEN CONTABLE
+------------------------------------------------------------------------------
+Ventas facturas (Gs)..................: 149.234.000
+Ventas bolsas (Gs)....................: 19.200.000
+VENTAS TOTALES (Gs)...................: 168.434.000
+Compras MP del mes (Gs)...............: 76.100.490
+Gastos del mes (Gs)...................: 16.924.891
+Margen bruto estimado (Gs)............: 92.333.510 (54.8%)
+Beneficio operativo estimado (Gs).....: 75.408.619 (44.8%)
+
+INVENTARIO VALUADO
+------------------------------------------------------------------------------
+Producto terminado (Gs)...............: 32.107.300
+Materia prima (Gs)....................: 1.289.626
+Inventario total (Gs).................: 33.396.926
+
+OPERACION DEL MES
+------------------------------------------------------------------------------
+Cantidad de facturas.................: 13
+Cantidad de ventas de bolsa..........: 1
+
+TOP PRODUCTOS (por venta del mes)
+------------------------------------------------------------------------------
+ 1. Arroz 1000 g | Paq: 950 | Total Gs: 44.250.000
+ 2. Azúcar 1000 g | Paq: 680 | Total Gs: 36.720.000
+ 3. Azúcar 500 g | Paq: 680 | Total Gs: 20.060.000
+ 4. Arroz 500 g | Paq: 570 | Total Gs: 14.950.000
+ 5. Azúcar 250 g | Paq: 275 | Total Gs: 8.800.000
+ 6. Arroz 250 g | Paq: 275 | Total Gs: 7.845.000
+ 7. Poroto Rojo 200 g | Paq: 100 | Total Gs: 4.700.000
+ 8. Poroto Rojo 400 g | Paq: 70 | Total Gs: 3.010.000
+ 9. Pororó 400 g | Paq: 98 | Total Gs: 2.940.000
+10. Galleta molida 800 g | Paq: 50 | Total Gs: 2.875.000
+
+NOTA
+------------------------------------------------------------------------------
+Margen/beneficio son estimados contables sobre caja del periodo (ventas - compras - gastos).
+==============================================================================

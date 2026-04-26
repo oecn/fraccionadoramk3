@@ -1,0 +1,45 @@
+==============================================================================
+REPORTE MENSUAL - Fraccionadora
+==============================================================================
+Periodo: 2025-10 (2025-10-01 a 2025-10-31)
+Generado: 2026-02-09 16:46:46
+Base de datos: C:\Users\osval\Desktop\dev\PDFREADER\GCPDFMK10\GCMK8\fraccionadora.db
+
+RESUMEN CONTABLE
+------------------------------------------------------------------------------
+Ventas facturas (Gs)..................: 175.543.500
+Ventas bolsas (Gs)....................: 0
+VENTAS TOTALES (Gs)...................: 175.543.500
+Compras MP del mes (Gs)...............: 53.528.370
+Gastos del mes (Gs)...................: 9.490.000
+Margen bruto estimado (Gs)............: 122.015.130 (69.5%)
+Beneficio operativo estimado (Gs).....: 112.525.130 (64.1%)
+
+INVENTARIO VALUADO
+------------------------------------------------------------------------------
+Producto terminado (Gs)...............: 32.107.300
+Materia prima (Gs)....................: 1.289.626
+Inventario total (Gs).................: 33.396.926
+
+OPERACION DEL MES
+------------------------------------------------------------------------------
+Cantidad de facturas.................: 11
+Cantidad de ventas de bolsa..........: 0
+
+TOP PRODUCTOS (por venta del mes)
+------------------------------------------------------------------------------
+ 1. Azúcar 1000 g | Paq: 1220 | Total Gs: 65.880.000
+ 2. Arroz 1000 g | Paq: 740 | Total Gs: 35.850.000
+ 3. Azúcar 500 g | Paq: 530 | Total Gs: 15.635.000
+ 4. Arroz 500 g | Paq: 530 | Total Gs: 14.370.000
+ 5. Azúcar 250 g | Paq: 350 | Total Gs: 11.200.000
+ 6. Arroz 250 g | Paq: 320 | Total Gs: 9.600.000
+ 7. Poroto Rojo 400 g | Paq: 150 | Total Gs: 6.030.000
+ 8. Poroto Rojo 200 g | Paq: 66 | Total Gs: 2.970.000
+ 9. Galleta molida 400 g | Paq: 92 | Total Gs: 2.852.000
+10. Pororó 200 g | Paq: 85 | Total Gs: 2.720.000
+
+NOTA
+------------------------------------------------------------------------------
+Margen/beneficio son estimados contables sobre caja del periodo (ventas - compras - gastos).
+==============================================================================

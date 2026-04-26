@@ -1,0 +1,47 @@
+==============================================================================
+REPORTE MENSUAL - GRAOS
+==============================================================================
+Periodo: 2025-12 (2025-12-01 a 2025-12-31)
+Generado: 2026-02-09 16:20:17
+Base de datos: C:\Users\osval\Desktop\dev\PDFREADER\GCPDFMK10\GCMK8\fraccionadora.db
+
+RESUMEN CONTABLE
+------------------------------------------------------------------------------
+Ventas facturas (Gs)..................: 149.117.000
+Ventas bolsas (Gs)....................: 0
+VENTAS TOTALES (Gs)...................: 149.117.000
+Compras MP del mes (Gs)...............: 136.311.170
+Gastos del mes (Gs)...................: 27.563.202
+Margen bruto estimado (Gs)............: 12.805.830 (8.6%)
+Beneficio operativo estimado (Gs).....: -14.757.372 (-9.9%)
+
+INVENTARIO VALUADO
+------------------------------------------------------------------------------
+Producto terminado (Gs)...............: 32.107.300
+Materia prima (Gs)....................: 1.289.626
+Inventario total (Gs).................: 33.396.926
+MP total (kg).........................: 287.480
+MP total (bolsas eq.).................: 8.050
+
+OPERACION DEL MES
+------------------------------------------------------------------------------
+Cantidad de facturas.................: 11
+Cantidad de ventas de bolsa..........: 0
+
+TOP PRODUCTOS (por venta del mes)
+------------------------------------------------------------------------------
+ 1. Azúcar 1000 g | Paq: 740 | Total Gs: 39.960.000
+ 2. Arroz 1000 g | Paq: 830 | Total Gs: 37.350.000
+ 3. Azúcar 500 g | Paq: 691 | Total Gs: 20.384.500
+ 4. Arroz 500 g | Paq: 550 | Total Gs: 13.750.000
+ 5. Azúcar 250 g | Paq: 305 | Total Gs: 9.760.000
+ 6. Arroz 250 g | Paq: 240 | Total Gs: 6.480.000
+ 7. Pororó 400 g | Paq: 137 | Total Gs: 4.110.000
+ 8. Pororó 800 g | Paq: 60 | Total Gs: 3.390.000
+ 9. Pororó 200 g | Paq: 105 | Total Gs: 3.360.000
+10. Lenteja 250 g | Paq: 26 | Total Gs: 3.120.000
+
+NOTA
+------------------------------------------------------------------------------
+Margen/beneficio son estimados contables sobre caja del periodo (ventas - compras - gastos).
+==============================================================================

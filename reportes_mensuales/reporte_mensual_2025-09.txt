@@ -1,0 +1,45 @@
+==============================================================================
+REPORTE MENSUAL - Fraccionadora
+==============================================================================
+Periodo: 2025-09 (2025-09-01 a 2025-09-30)
+Generado: 2026-02-09 16:46:46
+Base de datos: C:\Users\osval\Desktop\dev\PDFREADER\GCPDFMK10\GCMK8\fraccionadora.db
+
+RESUMEN CONTABLE
+------------------------------------------------------------------------------
+Ventas facturas (Gs)..................: 72.417.000
+Ventas bolsas (Gs)....................: 0
+VENTAS TOTALES (Gs)...................: 72.417.000
+Compras MP del mes (Gs)...............: 163.450.110
+Gastos del mes (Gs)...................: 0
+Margen bruto estimado (Gs)............: -91.033.110 (-125.7%)
+Beneficio operativo estimado (Gs).....: -91.033.110 (-125.7%)
+
+INVENTARIO VALUADO
+------------------------------------------------------------------------------
+Producto terminado (Gs)...............: 32.107.300
+Materia prima (Gs)....................: 1.289.626
+Inventario total (Gs).................: 33.396.926
+
+OPERACION DEL MES
+------------------------------------------------------------------------------
+Cantidad de facturas.................: 5
+Cantidad de ventas de bolsa..........: 0
+
+TOP PRODUCTOS (por venta del mes)
+------------------------------------------------------------------------------
+ 1. Azúcar 1000 g | Paq: 291 | Total Gs: 17.169.000
+ 2. Azúcar 500 g | Paq: 450 | Total Gs: 13.950.000
+ 3. Arroz 1000 g | Paq: 231 | Total Gs: 11.781.000
+ 4. Arroz 500 g | Paq: 381 | Total Gs: 10.668.000
+ 5. Azúcar 250 g | Paq: 131 | Total Gs: 4.257.500
+ 6. Arroz 250 g | Paq: 106 | Total Gs: 3.180.000
+ 7. Poroto Rojo 400 g | Paq: 90 | Total Gs: 3.150.000
+ 8. Poroto Rojo 200 g | Paq: 60 | Total Gs: 2.340.000
+ 9. Pororó 800 g | Paq: 30 | Total Gs: 1.740.000
+10. Pororó 200 g | Paq: 49 | Total Gs: 1.568.000
+
+NOTA
+------------------------------------------------------------------------------
+Margen/beneficio son estimados contables sobre caja del periodo (ventas - compras - gastos).
+==============================================================================
