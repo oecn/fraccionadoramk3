@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*-
+﻿# -*- coding: utf-8 -*-
 from __future__ import annotations
 
 import json
@@ -113,10 +113,7 @@ class DashboardRepo:
         self._ensure_dashboard_state_storage()
         self._ensure_local_check_usage_storage()
 
-    def _connect_fracc(self, row_factory=None):
-        return db.connect("fraccionadora")
-
-    def _connect_fracc_local_sqlite(self, row_factory=None):
+    def _connect_fracc(self):
         return db.connect("fraccionadora")
 
     @staticmethod
@@ -170,8 +167,6 @@ class DashboardRepo:
         return None
 
     def _build_fracc_stock_cache(self) -> tuple[list[tuple[int, str]], dict[tuple[int, int], int]]:
-        if not self.fracc_db.exists():
-            return [], {}
         cn = self._connect_fracc()
         cur = cn.cursor()
         try:
@@ -285,8 +280,6 @@ class DashboardRepo:
         return out
 
     def _ensure_dashboard_state_storage(self) -> None:
-        if not self.fracc_db.exists():
-            return
         cn = self._connect_fracc()
         db.run_ddl(cn,
             """
@@ -355,9 +348,7 @@ class DashboardRepo:
         self._sync_payment_flags_from_details()
 
     def _ensure_local_check_usage_storage(self) -> None:
-        if not self.fracc_db.exists():
-            return
-        cn = self._connect_fracc_local_sqlite()
+        cn = self._connect_fracc()
         db.run_ddl(cn,
             """
             CREATE TABLE IF NOT EXISTS dashboard_used_checks(
@@ -434,8 +425,6 @@ class DashboardRepo:
                 pass
 
     def _sync_payment_flags_from_details(self) -> None:
-        if not self.fracc_db.exists():
-            return
         try:
             cn = self._connect_fracc()
             cur = cn.cursor()
@@ -479,8 +468,6 @@ class DashboardRepo:
         return [f"std:{inv_id}:{ts_txt}:{nro_txt}", f"std:{inv_id}"]
 
     def load_paid_map(self) -> dict[int, bool]:
-        if not self.fracc_db.exists():
-            return {}
         cn = self._connect_fracc()
         cur = cn.cursor()
         rows = cur.execute("SELECT lot_id, paid FROM dashboard_payment_flags;").fetchall()
@@ -491,8 +478,6 @@ class DashboardRepo:
         return out
 
     def load_collections_map(self) -> dict[str, bool]:
-        if not self.fracc_db.exists():
-            return {}
         cn = self._connect_fracc()
         cur = cn.cursor()
         rows = cur.execute(
@@ -580,8 +565,6 @@ class DashboardRepo:
         cn.close()
 
     def load_payment_details(self) -> list[dict]:
-        if not self.fracc_db.exists():
-            return []
         cn = self._connect_fracc()
         cur = cn.cursor()
         rows = cur.execute(
@@ -614,9 +597,7 @@ class DashboardRepo:
                 self.upsert_payment_detail(row)
 
     def load_available_payment_checks(self) -> list[dict]:
-        if not self.fracc_db.exists():
-            return []
-        cn = self._connect_fracc_local_sqlite()
+        cn = self._connect_fracc()
         cur = cn.cursor()
         try:
             if not db.table_exists(cn, "bank_checkbooks"):
@@ -717,14 +698,12 @@ class DashboardRepo:
         return out
 
     def find_loaded_payment_check(self, serie: str, cheque_no: str) -> dict | None:
-        if not self.fracc_db.exists():
-            return None
         serie_txt = str(serie or "").strip().upper()
         cheque_txt = re.sub(r"\D+", "", str(cheque_no or "").strip())
         if not serie_txt or not cheque_txt.isdigit():
             return None
         cheque_n = int(cheque_txt)
-        cn = self._connect_fracc_local_sqlite()
+        cn = self._connect_fracc()
         cur = cn.cursor()
         try:
             row = cur.execute(
@@ -775,7 +754,7 @@ class DashboardRepo:
         serie = str(check_data.get("serie") or "").strip().upper()
         if not chequera_id or not cheque_no:
             return
-        cn = self._connect_fracc_local_sqlite()
+        cn = self._connect_fracc()
         cur = cn.cursor()
         cur.execute(
             """
@@ -864,8 +843,6 @@ class DashboardRepo:
         cn.close()
 
     def load_collection_details(self) -> list[dict]:
-        if not self.fracc_db.exists():
-            return []
         cn = self._connect_fracc()
         cur = cn.cursor()
         rows = cur.execute(
@@ -936,17 +913,16 @@ class DashboardRepo:
             for (s,) in rows:
                 out.add(str(s))
             cn.close()
-        if self.fracc_db.exists():
-            cn = db.connect("fraccionadora")
-            cur = cn.cursor()
-            rows = cur.execute(
-                "SELECT DISTINCT COALESCE(proveedor,'') FROM raw_lots WHERE TRIM(COALESCE(proveedor,''))<>''"
-            ).fetchall()
-            for (prov,) in rows:
-                suc = self._sucursal_from_proveedor(str(prov or ""))
-                if suc:
-                    out.add(suc)
-            cn.close()
+        cn = db.connect("fraccionadora")
+        cur = cn.cursor()
+        rows = cur.execute(
+            "SELECT DISTINCT COALESCE(proveedor,'') FROM raw_lots WHERE TRIM(COALESCE(proveedor,''))<>''"
+        ).fetchall()
+        for (prov,) in rows:
+            suc = self._sucursal_from_proveedor(str(prov or ""))
+            if suc:
+                out.add(suc)
+        cn.close()
         return sorted(out)
 
     def _load_paid_map(self) -> dict[int, bool]:
@@ -975,8 +951,6 @@ class DashboardRepo:
         from_date: str = "",
         to_date: str = "",
     ) -> tuple[float, int]:
-        if not self.fracc_db.exists():
-            return 0.0, 0
         cobros = self._load_collections_map()
         cn = db.connect("fraccionadora")
         cur = cn.cursor()
@@ -1031,8 +1005,6 @@ class DashboardRepo:
         to_date: str = "",
         limit: int = 200,
     ) -> list[CollectionRow]:
-        if not self.fracc_db.exists():
-            return []
         cobros = self._load_collections_map()
         cn = db.connect("fraccionadora")
         cur = cn.cursor()
@@ -1191,9 +1163,7 @@ class DashboardRepo:
         from_date: str = "",
         to_date: str = "",
     ) -> list[PaymentRow]:
-        # Misma fuente que "Resumen de compras": raw_lots + pagos_compras copy.json
-        if not self.fracc_db.exists():
-            return []
+        # Misma fuente que "Resumen de compras": raw_lots + flags de pago en PostgreSQL.
         paid = self._load_paid_map()
         cn = db.connect("fraccionadora")
         cur = cn.cursor()
@@ -1287,6 +1257,46 @@ class DashboardRepo:
         return int(c7 or 0), int(c30 or 0)
 
 
+class DashboardRefreshWorker(QtCore.QObject):
+    # Ejecuta consultas de red/DB fuera del hilo de UI para evitar congelar la ventana.
+    finished = QtCore.Signal(int, object)
+    failed = QtCore.Signal(int, str)
+
+    def __init__(self, request_id: int, repo: DashboardRepo, filters: dict):
+        super().__init__()
+        self.request_id = int(request_id)
+        self.repo = repo
+        self.filters = dict(filters)
+
+    @QtCore.Slot()
+    def run(self) -> None:
+        try:
+            # No tocar widgets aca: este objeto vive en un QThread.
+            suc = self.filters.get("sucursal", "")
+            srch = self.filters.get("search", "")
+            d1 = self.filters.get("from_date", "")
+            d2 = self.filters.get("to_date", "")
+            orders = self.repo.pending_orders(sucursal=suc, search=srch, from_date=d1, to_date=d2)
+            payments = self.repo.pending_payments(sucursal=suc, search=srch, from_date="", to_date="")
+            cobro_pend, cobro_count = self.repo.pending_collection_total(search=srch, from_date=d1, to_date=d2)
+            collections = self.repo.pending_collections(search=srch, from_date=d1, to_date=d2)
+            t7, t30 = self.repo.trend_data()
+            self.finished.emit(
+                self.request_id,
+                {
+                    "orders": orders,
+                    "payments": payments,
+                    "cobro_pend": cobro_pend,
+                    "cobro_count": cobro_count,
+                    "collections": collections,
+                    "trend_7": t7,
+                    "trend_30": t30,
+                },
+            )
+        except Exception as exc:
+            self.failed.emit(self.request_id, str(exc))
+
+
 class InicioDashboardWindow(QtWidgets.QMainWindow):
     def __init__(self, dark_mode: bool = False):
         super().__init__()
@@ -1298,6 +1308,12 @@ class InicioDashboardWindow(QtWidgets.QMainWindow):
         self._payments_grouped_by_supplier = False
         self._payments_supplier_desc = False
         self._collection_rows: list[CollectionRow] = []
+        # Estado del refresh asincrono: un worker activo y un refresh pendiente como maximo.
+        self._refresh_thread: QtCore.QThread | None = None
+        self._refresh_worker: DashboardRefreshWorker | None = None
+        self._refresh_request_id = 0
+        self._refresh_pending = False
+        self._closing = False
         self.setWindowTitle("Inicio operativo")
         self.resize(1240, 780)
         self._build_ui()
@@ -1343,7 +1359,7 @@ class InicioDashboardWindow(QtWidgets.QMainWindow):
         header_l.addWidget(self.btn_refrescar)
         self.btn_hamburger = QtWidgets.QToolButton()
         self.btn_hamburger.setObjectName("hamburgerBtn")
-        self.btn_hamburger.setText("☰")
+        self.btn_hamburger.setText("â˜°")
         self.btn_hamburger.setPopupMode(QtWidgets.QToolButton.InstantPopup)
         self.btn_hamburger.setToolButtonStyle(QtCore.Qt.ToolButtonTextOnly)
         menu = QtWidgets.QMenu(self.btn_hamburger)
@@ -1374,7 +1390,7 @@ class InicioDashboardWindow(QtWidgets.QMainWindow):
         ll.addWidget(QtWidgets.QLabel("Pedidos pendientes de entrega (Importador OC)"))
         self.tbl_orders = QtWidgets.QTableWidget(0, 9)
         self.tbl_orders.setHorizontalHeaderLabels(
-            ["Pedido", "Sucursal", "Fecha pedido", "Compromiso", "Días atraso", "Estado", "Prioridad", "% listo para entrega", "Monto"]
+            ["Pedido", "Sucursal", "Fecha pedido", "Compromiso", "DÃ­as atraso", "Estado", "Prioridad", "% listo para entrega", "Monto"]
         )
         self.tbl_orders.horizontalHeader().setStretchLastSection(True)
         self.tbl_orders.verticalHeader().setVisible(False)
@@ -1394,10 +1410,10 @@ class InicioDashboardWindow(QtWidgets.QMainWindow):
         rl = QtWidgets.QVBoxLayout(right)
         rl.setContentsMargins(8, 8, 8, 8)
         rl.setSpacing(6)
-        rl.addWidget(QtWidgets.QLabel("Pagos pendientes de mercadería"))
+        rl.addWidget(QtWidgets.QLabel("Pagos pendientes de mercaderÃ­a"))
         self.tbl_payments = QtWidgets.QTableWidget(0, 7)
         self.tbl_payments.setHorizontalHeaderLabels(
-            ["Proveedor", "Factura", "Emisión", "Vencimiento", "Días", "Estado", "Monto"]
+            ["Proveedor", "Factura", "EmisiÃ³n", "Vencimiento", "DÃ­as", "Estado", "Monto"]
         )
         self.tbl_payments.horizontalHeader().setStretchLastSection(True)
         self.tbl_payments.verticalHeader().setVisible(False)
@@ -1465,10 +1481,10 @@ class InicioDashboardWindow(QtWidgets.QMainWindow):
         tl.setContentsMargins(8, 8, 8, 8)
         tl.setSpacing(6)
         tl.addWidget(QtWidgets.QLabel("Tendencia"))
-        self.lbl_trend_7 = QtWidgets.QLabel("Pendientes últimos 7 días: 0")
-        self.lbl_trend_30 = QtWidgets.QLabel("Pendientes últimos 30 días: 0")
+        self.lbl_trend_7 = QtWidgets.QLabel("Pendientes Ãºltimos 7 dÃ­as: 0")
+        self.lbl_trend_30 = QtWidgets.QLabel("Pendientes Ãºltimos 30 dÃ­as: 0")
         self.lbl_note = QtWidgets.QLabel(
-            f"* Compromiso estimado: fecha pedido + {DELIVERY_SLA_DAYS} días / crédito + {CREDIT_TERM_DAYS} días"
+            f"* Compromiso estimado: fecha pedido + {DELIVERY_SLA_DAYS} dÃ­as / crÃ©dito + {CREDIT_TERM_DAYS} dÃ­as"
         )
         self.lbl_note.setWordWrap(True)
         tl.addWidget(self.lbl_trend_7)
@@ -1568,6 +1584,7 @@ class InicioDashboardWindow(QtWidgets.QMainWindow):
         return QtGui.QColor("#bbf7d0")
 
     def refresh_data(self) -> None:
+        # Captura filtros en el hilo de UI; el worker solo recibe datos planos.
         suc = self.cb_sucursal.currentText().strip()
         if suc == "Todas":
             suc = ""
@@ -1575,22 +1592,82 @@ class InicioDashboardWindow(QtWidgets.QMainWindow):
         d1 = self._qdate_to_iso(self.dt_desde.date())
         d2 = self._qdate_to_iso(self.dt_hasta.date())
 
-        orders = self.repo.pending_orders(sucursal=suc, search=srch, from_date=d1, to_date=d2)
-        payments = self.repo.pending_payments(sucursal=suc, search=srch, from_date="", to_date="")
-        cobro_pend, cobro_count = self.repo.pending_collection_total(search=srch, from_date=d1, to_date=d2)
-        collections = self.repo.pending_collections(search=srch, from_date=d1, to_date=d2)
+        if self._refresh_thread is not None:
+            # Evita lanzar varios workers simultaneos; se ejecuta uno nuevo al terminar.
+            self._refresh_pending = True
+            self.lbl_status.setText("Actualizacion en curso; se refrescara al terminar...")
+            return
 
+        self._refresh_request_id += 1
+        request_id = self._refresh_request_id
+        filters = {"sucursal": suc, "search": srch, "from_date": d1, "to_date": d2}
+        self._set_refresh_busy(True)
+
+        # Cada worker abre sus propias conexiones via DashboardRepo; no comparte cursores.
+        thread = QtCore.QThread()
+        worker = DashboardRefreshWorker(request_id, self.repo, filters)
+        worker.moveToThread(thread)
+        thread.started.connect(worker.run)
+        worker.finished.connect(self._on_refresh_loaded)
+        worker.failed.connect(self._on_refresh_failed)
+        worker.finished.connect(thread.quit)
+        worker.failed.connect(thread.quit)
+        worker.finished.connect(worker.deleteLater)
+        worker.failed.connect(worker.deleteLater)
+        thread.finished.connect(self._on_refresh_thread_finished)
+        thread.finished.connect(thread.deleteLater)
+        self._refresh_thread = thread
+        self._refresh_worker = worker
+        thread.start()
+
+    def _set_refresh_busy(self, busy: bool) -> None:
+        self.btn_refrescar.setEnabled(not busy)
+        if busy:
+            self.lbl_status.setText("Cargando datos...")
+
+    def _on_refresh_loaded(self, request_id: int, data: object) -> None:
+        # Ignora resultados viejos si otro refresh fue solicitado despues.
+        if self._closing or request_id != self._refresh_request_id or not isinstance(data, dict):
+            return
+        orders = data.get("orders") or []
+        payments = data.get("payments") or []
+        collections = data.get("collections") or []
+        cobro_pend = float(data.get("cobro_pend") or 0.0)
+        cobro_count = int(data.get("cobro_count") or 0)
         self._fill_orders(orders)
         self._fill_payments(payments)
         self._fill_collections(collections)
         self._fill_kpis(orders, payments, cobro_pend, cobro_count)
-
-        t7, t30 = self.repo.trend_data()
-        self.lbl_trend_7.setText(f"Pendientes últimos 7 días: {t7}")
-        self.lbl_trend_30.setText(f"Pendientes últimos 30 días: {t30}")
+        self.lbl_trend_7.setText(f"Pendientes Ãºltimos 7 dÃ­as: {int(data.get('trend_7') or 0)}")
+        self.lbl_trend_30.setText(f"Pendientes Ãºltimos 30 dÃ­as: {int(data.get('trend_30') or 0)}")
         self.lbl_status.setText(
             f"Actualizado: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}  |  Fuente OC: {self.repo.orders_db}"
         )
+
+    def _on_refresh_failed(self, request_id: int, message: str) -> None:
+        if self._closing or request_id != self._refresh_request_id:
+            return
+        self.lbl_status.setText(f"No se pudo actualizar: {message}")
+        QtWidgets.QMessageBox.warning(self, "Actualizar dashboard", f"No se pudo actualizar el dashboard:\n{message}")
+
+    def _on_refresh_thread_finished(self) -> None:
+        # Limpieza de referencias para permitir que Qt destruya thread/worker.
+        self._refresh_thread = None
+        self._refresh_worker = None
+        if self._closing:
+            return
+        self._set_refresh_busy(False)
+        if self._refresh_pending:
+            self._refresh_pending = False
+            QtCore.QTimer.singleShot(0, self.refresh_data)
+
+    def closeEvent(self, event) -> None:
+        self._closing = True
+        self._refresh_pending = False
+        if self._refresh_thread is not None:
+            self._refresh_thread.quit()
+            self._refresh_thread.wait(2000)
+        super().closeEvent(event)
 
     def _fill_orders(self, rows: list[OrderRow]) -> None:
         self._order_rows = list(rows)
@@ -1831,15 +1908,15 @@ class InicioDashboardWindow(QtWidgets.QMainWindow):
                 ("Factura ID", str(r.get("invoice_id") or "-")),
                 ("N Factura", str(r.get("invoice_no") or "-")),
                 ("Cliente", str(r.get("cliente") or "-")),
-                ("Fecha emisión", str(r.get("invoice_ts") or "-")),
+                ("Fecha emisiÃ³n", str(r.get("invoice_ts") or "-")),
                 ("Fecha cobro", str(r.get("fecha_cobro") or "-")),
                 ("Medio", str(r.get("medio") or "-").capitalize()),
                 ("Nro cheque", str(r.get("nro_cheque") or "-")),
-                ("Nro depósito", str(r.get("nro_deposito") or "-")),
+                ("Nro depÃ³sito", str(r.get("nro_deposito") or "-")),
                 ("Referencia", str(r.get("referencia") or "-")),
-                ("Observación", str(r.get("observacion") or "-")),
+                ("ObservaciÃ³n", str(r.get("observacion") or "-")),
                 ("Monto total (Gs)", DashboardRepo._fmt_gs(float(r.get("monto_total_gs") or 0.0))),
-                ("Total con retención (Gs)", DashboardRepo._fmt_gs(float(r.get("monto_total_ret_gs") or 0.0))),
+                ("Total con retenciÃ³n (Gs)", DashboardRepo._fmt_gs(float(r.get("monto_total_ret_gs") or 0.0))),
                 ("Registrado en", str(r.get("ts_registro") or "-")),
             ]
             detail.setRowCount(len(campos))
@@ -1892,7 +1969,7 @@ class InicioDashboardWindow(QtWidgets.QMainWindow):
             ent_cheque = QtWidgets.QLineEdit(str(src.get("nro_cheque") or ""))
             form.addRow(lbl_cheque, ent_cheque)
 
-            lbl_deposito = QtWidgets.QLabel("Nro depósito:")
+            lbl_deposito = QtWidgets.QLabel("Nro depÃ³sito:")
             ent_deposito = QtWidgets.QLineEdit(str(src.get("nro_deposito") or ""))
             form.addRow(lbl_deposito, ent_deposito)
 
@@ -1902,7 +1979,7 @@ class InicioDashboardWindow(QtWidgets.QMainWindow):
 
             ent_obs = QtWidgets.QPlainTextEdit(str(src.get("observacion") or ""))
             ent_obs.setFixedHeight(80)
-            form.addRow("Observación:", ent_obs)
+            form.addRow("ObservaciÃ³n:", ent_obs)
 
             def _on_medio_change(txt: str):
                 is_cheque = (txt or "").strip().lower() == "cheque"
@@ -1936,10 +2013,10 @@ class InicioDashboardWindow(QtWidgets.QMainWindow):
                 nro_deposito = ent_deposito.text().strip()
                 if medio_edit == "cheque":
                     if not nro_cheque:
-                        QtWidgets.QMessageBox.warning(edit, "Validación", "Debe ingresar el número de cheque.")
+                        QtWidgets.QMessageBox.warning(edit, "ValidaciÃ³n", "Debe ingresar el nÃºmero de cheque.")
                         return
                     if not nro_deposito:
-                        QtWidgets.QMessageBox.warning(edit, "Validación", "Debe ingresar el número de depósito.")
+                        QtWidgets.QMessageBox.warning(edit, "ValidaciÃ³n", "Debe ingresar el nÃºmero de depÃ³sito.")
                         return
                 src["fecha_cobro"] = dt_cobro.date().toString("yyyy-MM-dd")
                 src["medio"] = medio_edit
@@ -2025,12 +2102,12 @@ class InicioDashboardWindow(QtWidgets.QMainWindow):
 
         lbl_cheque = QtWidgets.QLabel("Nro cheque:")
         ent_cheque = QtWidgets.QLineEdit()
-        ent_cheque.setPlaceholderText("Ingrese número de cheque")
+        ent_cheque.setPlaceholderText("Ingrese nÃºmero de cheque")
         form.addRow(lbl_cheque, ent_cheque)
 
-        lbl_deposito = QtWidgets.QLabel("Nro depósito:")
+        lbl_deposito = QtWidgets.QLabel("Nro depÃ³sito:")
         ent_deposito = QtWidgets.QLineEdit()
-        ent_deposito.setPlaceholderText("Ingrese número de depósito")
+        ent_deposito.setPlaceholderText("Ingrese nÃºmero de depÃ³sito")
         form.addRow(lbl_deposito, ent_deposito)
 
         lbl_ref = QtWidgets.QLabel("Referencia:")
@@ -2056,9 +2133,9 @@ class InicioDashboardWindow(QtWidgets.QMainWindow):
         form.addRow(lbl_cheque_sistema, cb_cheque)
 
         ent_obs = QtWidgets.QPlainTextEdit()
-        ent_obs.setPlaceholderText("Observación opcional")
+        ent_obs.setPlaceholderText("ObservaciÃ³n opcional")
         ent_obs.setFixedHeight(80)
-        form.addRow("Observación:", ent_obs)
+        form.addRow("ObservaciÃ³n:", ent_obs)
 
         def _on_medio_change(txt: str):
             is_cheque = (txt or "").strip().lower() == "cheque"
@@ -2105,10 +2182,10 @@ class InicioDashboardWindow(QtWidgets.QMainWindow):
             nro_deposito = ent_deposito.text().strip()
             if medio == "cheque":
                 if not nro_cheque:
-                    QtWidgets.QMessageBox.warning(dlg, "Validación", "Debe ingresar el número de cheque.")
+                    QtWidgets.QMessageBox.warning(dlg, "ValidaciÃ³n", "Debe ingresar el nÃºmero de cheque.")
                     return
                 if not nro_deposito:
-                    QtWidgets.QMessageBox.warning(dlg, "Validación", "Debe ingresar el número de depósito.")
+                    QtWidgets.QMessageBox.warning(dlg, "ValidaciÃ³n", "Debe ingresar el nÃºmero de depÃ³sito.")
                     return
             payload = {
                 "ts_registro": datetime.now().isoformat(timespec="seconds"),
@@ -2177,7 +2254,7 @@ class InicioDashboardWindow(QtWidgets.QMainWindow):
             QtWidgets.QMessageBox.information(
                 self,
                 "Factura",
-                "El registro seleccionado no tiene número de factura asociado.",
+                "El registro seleccionado no tiene nÃºmero de factura asociado.",
             )
             return
         pdf_path = self._lookup_factura_pdf_path(factura_num)
@@ -2226,17 +2303,17 @@ class InicioDashboardWindow(QtWidgets.QMainWindow):
         lay.addWidget(resumen)
 
         if not faltantes:
-            ok_lbl = QtWidgets.QLabel("Todos los ítems pendientes del pedido están cubiertos con el stock actual.")
+            ok_lbl = QtWidgets.QLabel("Todos los Ã­tems pendientes del pedido estÃ¡n cubiertos con el stock actual.")
             ok_lbl.setStyleSheet("color: #166534; font-weight: 600;")
             lay.addWidget(ok_lbl)
         else:
-            info_lbl = QtWidgets.QLabel(f"Ítems no cubiertos: {len(faltantes)}")
+            info_lbl = QtWidgets.QLabel(f"Ãtems no cubiertos: {len(faltantes)}")
             info_lbl.setStyleSheet("color: #991b1b; font-weight: 600;")
             lay.addWidget(info_lbl)
 
             tbl = QtWidgets.QTableWidget(0, 6)
             tbl.setHorizontalHeaderLabels(
-                ["Línea", "Descripción", "Necesario", "Disponible", "Faltante", "Estado"]
+                ["LÃ­nea", "DescripciÃ³n", "Necesario", "Disponible", "Faltante", "Estado"]
             )
             tbl.horizontalHeader().setStretchLastSection(True)
             tbl.verticalHeader().setVisible(False)
@@ -2416,7 +2493,7 @@ class InicioDashboardWindow(QtWidgets.QMainWindow):
             if show_cheque:
                 lbl_ref.setText("Nro cheque:")
                 ent_ref.setEnabled(True)
-                ent_ref.setPlaceholderText("Ingrese número de cheque")
+                ent_ref.setPlaceholderText("Ingrese nÃºmero de cheque")
             else:
                 lbl_ref.setText("Nro comprobante:")
                 ent_ref.setEnabled(True)
@@ -2453,14 +2530,14 @@ class InicioDashboardWindow(QtWidgets.QMainWindow):
                 lbl_cheque_estado.setStyleSheet("")
                 return
             if not current_check_data:
-                lbl_cheque_estado.setText("No, no está cargado")
+                lbl_cheque_estado.setText("No, no estÃ¡ cargado")
                 lbl_cheque_estado.setStyleSheet("color: #b91c1c;")
                 return
             if current_check_data.get("used"):
-                lbl_cheque_estado.setText("Sí, pero ya está usado")
+                lbl_cheque_estado.setText("SÃ­, pero ya estÃ¡ usado")
                 lbl_cheque_estado.setStyleSheet("color: #b45309;")
                 return
-            lbl_cheque_estado.setText("Sí")
+            lbl_cheque_estado.setText("SÃ­")
             lbl_cheque_estado.setStyleSheet("color: #166534;")
 
         cb_medio.currentTextChanged.connect(_on_medio_change)
@@ -2488,14 +2565,14 @@ class InicioDashboardWindow(QtWidgets.QMainWindow):
             if medio == "Cheque":
                 serie_txt = ent_serie.text().strip().upper()
                 if not serie_txt or not ref:
-                    QtWidgets.QMessageBox.warning(dlg, "Validacion", "Debe ingresar la serie y el número de cheque.")
+                    QtWidgets.QMessageBox.warning(dlg, "Validacion", "Debe ingresar la serie y el nÃºmero de cheque.")
                     return
                 current_check_data = self.repo.find_loaded_payment_check(serie_txt, ref) or {}
                 if not current_check_data:
-                    QtWidgets.QMessageBox.warning(dlg, "Validacion", "Ese cheque no está cargado en el sistema.")
+                    QtWidgets.QMessageBox.warning(dlg, "Validacion", "Ese cheque no estÃ¡ cargado en el sistema.")
                     return
                 if current_check_data.get("used"):
-                    QtWidgets.QMessageBox.warning(dlg, "Validacion", "Ese cheque ya está marcado como usado.")
+                    QtWidgets.QMessageBox.warning(dlg, "Validacion", "Ese cheque ya estÃ¡ marcado como usado.")
                     return
                 ref = str((current_check_data or {}).get("reference_value") or "").strip()
             if medio == "Transferencia" and not ref:
@@ -2688,14 +2765,14 @@ class InicioDashboardWindow(QtWidgets.QMainWindow):
         self.kpi_pag_pend.set_data(DashboardRepo._fmt_gs(monto_pend), "Gs")
         self.kpi_pag_venc.set_data(
             DashboardRepo._fmt_gs(cobro_pend),
-            f"Gs ({cobro_count} facturas, con retención)",
+            f"Gs ({cobro_count} facturas, con retenciÃ³n)",
         )
 
     def _not_implemented(self) -> None:
         QtWidgets.QMessageBox.information(
             self,
-            "Acción rápida",
-            "Esta acción se deja conectada al dashboard para integrarla con tu flujo actual.",
+            "AcciÃ³n rÃ¡pida",
+            "Esta acciÃ³n se deja conectada al dashboard para integrarla con tu flujo actual.",
         )
 
     def _apply_theme(self) -> None:
