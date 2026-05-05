@@ -209,9 +209,13 @@ class TabHistorialVentas:
         d1 = (self.ent_desde.get() or "").strip()
         d2 = (self.ent_hasta.get() or "").strip()
 
-        rows = []
-        rows.extend(self._fetch_invoice_rows(ftxt, d1, d2))
-        rows.extend(self._fetch_bag_sale_rows(ftxt, d1, d2))
+        try:
+            rows = []
+            rows.extend(self._fetch_invoice_rows(ftxt, d1, d2))
+            rows.extend(self._fetch_bag_sale_rows(ftxt, d1, d2))
+        except Exception as exc:
+            messagebox.showerror("Error", f"No se pudo cargar el historial de ventas:\n{exc}")
+            return
         rows.sort(key=lambda r: r.get("ts") or "", reverse=True)
 
         for row in rows:
@@ -332,16 +336,18 @@ class TabHistorialVentas:
             self.tv_det.delete(i)
         self._det_row_meta = {}
 
-        cur = self.repo.cn.cursor()
-        sql = """
-            SELECT sii.id, p.name, sii.gramaje, sii.cantidad, sii.price_gs, sii.iva, sii.line_total
-            FROM sales_invoice_items sii
-            JOIN products p ON p.id = sii.product_id
-            WHERE sii.invoice_id = %s
-            ORDER BY p.name, sii.gramaje;
-        """
-        cur.execute(sql, (invoice_id,))
-        for item_id, pname, gram, cant, precio, iva, total in cur.fetchall():
+        with db.connection("fraccionadora") as cn:
+            cur = cn.cursor()
+            sql = """
+                SELECT sii.id, p.name, sii.gramaje, sii.cantidad, sii.price_gs, sii.iva, sii.line_total
+                FROM sales_invoice_items sii
+                JOIN products p ON p.id = sii.product_id
+                WHERE sii.invoice_id = %s
+                ORDER BY p.name, sii.gramaje;
+            """
+            cur.execute(sql, (invoice_id,))
+            rows = cur.fetchall()
+        for item_id, pname, gram, cant, precio, iva, total in rows:
             iid = self.tv_det.insert("", "end",
                 values=(pname, gram, cant,
                         f"{precio:,.0f}".replace(",", "."),
@@ -472,9 +478,8 @@ class TabHistorialVentas:
     # =======================
     #   Helpers
     # =======================
-    def _ensure_collection_storage(self):
-        cur = self.repo.cn.cursor()
-        db.run_ddl(self.cn, 
+    def _ensure_collection_storage(self, cn):
+        db.run_ddl(cn,
             """
             CREATE TABLE IF NOT EXISTS dashboard_collection_flags(
                 status_key TEXT PRIMARY KEY,
@@ -507,7 +512,6 @@ class TabHistorialVentas:
                 ON dashboard_collection_details(invoice_id, invoice_ts, invoice_no);
             """
         )
-        self.repo.cn.commit()
 
     def _collection_keys(self, invoice_id, ts, nro):
         inv_id = int(invoice_id or 0)
@@ -516,43 +520,44 @@ class TabHistorialVentas:
         return [f"std:{inv_id}:{ts_txt}:{nro_txt}", f"std:{inv_id}"]
 
     def _load_cobranzas_from_db(self):
-        self._ensure_collection_storage()
-        cur = self.repo.cn.cursor()
-        cur.execute(
-            "SELECT status_key, invoice_id, invoice_ts, invoice_no, collected FROM dashboard_collection_flags;"
-        )
-        out = {}
-        for status_key, invoice_id, invoice_ts, invoice_no, collected in cur.fetchall():
-            status_val = bool(collected)
-            if status_key:
-                out[str(status_key)] = status_val
-            for key in self._collection_keys(invoice_id, invoice_ts, invoice_no):
-                out[key] = status_val
-        return out
+        with db.connection("fraccionadora") as cn:
+            self._ensure_collection_storage(cn)
+            cur = cn.cursor()
+            cur.execute(
+                "SELECT status_key, invoice_id, invoice_ts, invoice_no, collected FROM dashboard_collection_flags;"
+            )
+            out = {}
+            for status_key, invoice_id, invoice_ts, invoice_no, collected in cur.fetchall():
+                status_val = bool(collected)
+                if status_key:
+                    out[str(status_key)] = status_val
+                for key in self._collection_keys(invoice_id, invoice_ts, invoice_no):
+                    out[key] = status_val
+            return out
 
     def _save_std_cobranza_to_db(self, meta, cobrado):
-        self._ensure_collection_storage()
         invoice_id = int(meta.get("invoice_id") or 0)
         invoice_ts = str(meta.get("ts") or "").strip()
         invoice_no = str(meta.get("nro") or "").strip()
         if invoice_id <= 0:
             return
-        cur = self.repo.cn.cursor()
-        for key in self._collection_keys(invoice_id, invoice_ts, invoice_no):
-            cur.execute(
-                """
-                INSERT INTO dashboard_collection_flags(status_key, invoice_id, invoice_ts, invoice_no, collected, updated_ts)
-                VALUES(%s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
-                ON CONFLICT(status_key) DO UPDATE SET
-                    invoice_id=excluded.invoice_id,
-                    invoice_ts=excluded.invoice_ts,
-                    invoice_no=excluded.invoice_no,
-                    collected=excluded.collected,
-                    updated_ts=CURRENT_TIMESTAMP;
-                """,
-                (key, invoice_id, invoice_ts, invoice_no, 1 if cobrado else 0),
-            )
-        self.repo.cn.commit()
+        with db.connection("fraccionadora") as cn:
+            self._ensure_collection_storage(cn)
+            cur = cn.cursor()
+            for key in self._collection_keys(invoice_id, invoice_ts, invoice_no):
+                cur.execute(
+                    """
+                    INSERT INTO dashboard_collection_flags(status_key, invoice_id, invoice_ts, invoice_no, collected, updated_ts)
+                    VALUES(%s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
+                    ON CONFLICT(status_key) DO UPDATE SET
+                        invoice_id=excluded.invoice_id,
+                        invoice_ts=excluded.invoice_ts,
+                        invoice_no=excluded.invoice_no,
+                        collected=excluded.collected,
+                        updated_ts=CURRENT_TIMESTAMP;
+                    """,
+                    (key, invoice_id, invoice_ts, invoice_no, 1 if cobrado else 0),
+                )
 
     def _cargar_cobranzas(self):
         cobranzas_db = {}
@@ -775,7 +780,6 @@ class TabHistorialVentas:
         return clause, params
 
     def _fetch_invoice_rows(self, filtro_txt, desde, hasta):
-        cur = self.repo.cn.cursor()
         clause, params = self._build_where_clause("si", filtro_txt, desde, hasta)
         sql = f"""
             SELECT si.id, si.ts, si.invoice_no, si.customer,
@@ -784,9 +788,12 @@ class TabHistorialVentas:
             {clause}
             ORDER BY si.ts DESC;
         """
-        cur.execute(sql, params)
+        with db.connection("fraccionadora") as cn:
+            cur = cn.cursor()
+            cur.execute(sql, params)
+            fetched = cur.fetchall()
         rows = []
-        for fid, fecha, nro, cli, g5, i5, g10, i10, tot in cur.fetchall():
+        for fid, fecha, nro, cli, g5, i5, g10, i10, tot in fetched:
             rows.append({
                 "tipo": "std",
                 "iid": f"std-{fid}",
@@ -805,7 +812,6 @@ class TabHistorialVentas:
         return rows
 
     def _fetch_bag_sale_rows(self, filtro_txt, desde, hasta):
-        cur = self.repo.cn.cursor()
         clause, params = self._build_where_clause("bs", filtro_txt, desde, hasta)
         sql = f"""
             SELECT bs.id, bs.ts, bs.invoice_no, bs.customer, bs.total_gs
@@ -813,9 +819,12 @@ class TabHistorialVentas:
             {clause}
             ORDER BY bs.ts DESC;
         """
-        cur.execute(sql, params)
+        with db.connection("fraccionadora") as cn:
+            cur = cn.cursor()
+            cur.execute(sql, params)
+            fetched = cur.fetchall()
         rows = []
-        for sid, fecha, nro, cli, total in cur.fetchall():
+        for sid, fecha, nro, cli, total in fetched:
             rows.append({
                 "tipo": "bag",
                 "iid": f"bag-{sid}",

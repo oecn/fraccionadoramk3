@@ -4,9 +4,10 @@ Reemplaza pg_sqlite_compat.py — conexión directa, sin capa de traducción.
 """
 from __future__ import annotations
 
+from contextlib import contextmanager
 import os
 import re
-from typing import Any, Sequence
+from typing import Any, Iterator, Sequence
 
 import psycopg
 
@@ -86,6 +87,33 @@ def connect(schema: str, autocommit: bool = False) -> psycopg.Connection:
     conn = psycopg.connect(DATABASE_URL, autocommit=autocommit, row_factory=_flex_row_factory)
     conn.execute(f'SET search_path TO "{schema}", public;')
     return conn
+
+
+@contextmanager
+def connection(schema: str) -> Iterator[psycopg.Connection]:
+    """
+    Context manager transaccional para conexiones cortas.
+
+    Hace commit si el bloque termina bien, rollback si falla y siempre cierra
+    la conexion. Mantiene connect() disponible para codigo legacy.
+    """
+    cn = connect(schema)
+    try:
+        yield cn
+        cn.commit()
+    except Exception:
+        cn.rollback()
+        raise
+    finally:
+        cn.close()
+
+
+def fetchone_required(cur: psycopg.Cursor, msg: str = "") -> Row:
+    """Devuelve cur.fetchone() o falla con contexto si no hubo fila."""
+    row = cur.fetchone()
+    if row is None:
+        raise RuntimeError(msg or "Query no retorno la fila esperada.")
+    return row
 
 
 # ---------------------------------------------------------------------------

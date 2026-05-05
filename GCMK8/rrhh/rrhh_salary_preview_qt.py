@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import sys
+from datetime import date
 from pathlib import Path
 
 from PySide6 import QtCore, QtWidgets
@@ -26,7 +27,7 @@ class RRHHTxtPreviewDialog(QtWidgets.QDialog):
         form = QtWidgets.QFormLayout()
         self.lbl_file = QtWidgets.QLabel(parsed.get("file_path") or "-")
         self.lbl_file.setTextInteractionFlags(QtCore.Qt.TextInteractionFlag.TextSelectableByMouse)
-        self.ent_fecha = QtWidgets.QLineEdit(parsed.get("suggested_date") or "")
+        self.ent_fecha = QtWidgets.QLineEdit(parsed.get("suggested_date") or date.today().strftime("%Y-%m-%d"))
         self.lbl_total = QtWidgets.QLabel(self._fmt_gs(parsed.get("total_amount") or 0.0))
         self.lbl_rows = QtWidgets.QLabel(str(parsed.get("row_count") or 0))
         self.lbl_conceptos = QtWidgets.QLabel(", ".join(parsed.get("conceptos") or []))

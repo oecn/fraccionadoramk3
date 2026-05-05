@@ -105,7 +105,7 @@ class InicioDashboardWindow(QtWidgets.QMainWindow):
         header_l.addWidget(QtWidgets.QLabel("Hasta:"))
         self.dt_hasta = QtWidgets.QDateEdit()
         self.dt_hasta.setCalendarPopup(True)
-        self.dt_hasta.setDate(QtCore.QDate.currentDate())
+        self.dt_hasta.setDate(QtCore.QDate.currentDate().addDays(30))
         header_l.addWidget(self.dt_hasta)
         self.txt_buscar = QtWidgets.QLineEdit()
         self.txt_buscar.setPlaceholderText("Buscar por Nro. pedido/factura")
@@ -397,7 +397,7 @@ class InicioDashboardWindow(QtWidgets.QMainWindow):
         self.lbl_trend_7.setText(f"Pendientes Ãºltimos 7 dÃ­as: {int(data.get('trend_7') or 0)}")
         self.lbl_trend_30.setText(f"Pendientes Ãºltimos 30 dÃ­as: {int(data.get('trend_30') or 0)}")
         self.lbl_status.setText(
-            f"Actualizado: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}  |  Fuente OC: {self.repo.orders_db}"
+            f"Actualizado: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}  |  Fuente: PostgreSQL"
         )
 
     def _on_refresh_failed(self, request_id: int, message: str) -> None:
@@ -977,8 +977,6 @@ class InicioDashboardWindow(QtWidgets.QMainWindow):
     def _lookup_factura_pdf_path(self, factura_num: str) -> str | None:
         numero = (factura_num or "").strip()
         if not numero:
-            return None
-        if not self.repo.invoices_db.exists():
             return None
         try:
             cn = db.connect("facturas")

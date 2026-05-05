@@ -26,11 +26,8 @@ import db
 from PySide6 import QtCore
 
 
-ORDERS_DB = ROOT_DIR / "PDFMK10" / "db" / "pedidos.db"
-INVOICES_DB = ROOT_DIR / "importadorfactur" / "facturas.db"
 PAYMENTS_JSON = ROOT_DIR / "pagos_compras copy.json"
 PAYMENTS_DETAIL_JSON = ROOT_DIR / "pagos_compras_detalle.json"
-FRACC_DB = ROOT_DIR / "GCMK8" / "fraccionadora.db"
 COBROS_VENTAS_JSON = ROOT_DIR / "cobros_ventas.json"
 COBROS_VENTAS_DETAIL_JSON = ROOT_DIR / "cobros_ventas_detalle.json"
 
@@ -95,22 +92,9 @@ class DashboardRepo:
     de pago/cobro y cheques ya usados desde esta pantalla.
     """
 
-    def __init__(
-        self,
-        orders_db: Path = ORDERS_DB,
-        invoices_db: Path = INVOICES_DB,
-        fracc_db: Path = FRACC_DB,
-    ):
-        self.orders_db = orders_db
-        self.invoices_db = invoices_db
-        self.fracc_db = fracc_db
+    def __init__(self):
         self._ensure_dashboard_state_storage()
         self._ensure_local_check_usage_storage()
-
-    def _connect_fracc(self):
-        """Abre una conexion a la base principal de fraccionadora."""
-
-        return db.connect("fraccionadora")
 
     @staticmethod
     def _norm_text(value: str) -> str:
@@ -171,13 +155,10 @@ class DashboardRepo:
     def _build_fracc_stock_cache(self) -> tuple[list[tuple[int, str]], dict[tuple[int, int], int]]:
         """Carga productos y stock empaquetado para calcular disponibilidad."""
 
-        cn = self._connect_fracc()
-        cur = cn.cursor()
-        try:
+        with db.connection("fraccionadora") as cn:
+            cur = cn.cursor()
             products = [(int(pid), str(name or "")) for pid, name in cur.execute("SELECT id, name FROM products;").fetchall()]
             stock_rows = cur.execute("SELECT product_id, gramaje, paquetes FROM package_stock;").fetchall()
-        finally:
-            cn.close()
         stock_map: dict[tuple[int, int], int] = {}
         for pid, gram, paquetes in stock_rows:
             stock_map[(int(pid), int(gram))] = int(paquetes or 0)
@@ -191,11 +172,8 @@ class DashboardRepo:
     ) -> float:
         """Calcula que porcentaje de items pendientes de una OC tiene stock."""
 
-        if not self.orders_db.exists():
-            return 0.0
-        cn = db.connect("pedidos")
-        cur = cn.cursor()
-        try:
+        with db.connection("pedidos") as cn:
+            cur = cn.cursor()
             rows = cur.execute(
                 """
                 SELECT descripcion, cantidad
@@ -206,8 +184,6 @@ class DashboardRepo:
                 """,
                 (int(oc_id),),
             ).fetchall()
-        finally:
-            cn.close()
 
         total = len(rows)
         if total <= 0:
@@ -231,11 +207,8 @@ class DashboardRepo:
         """Devuelve los items de una OC que no alcanzan stock o no se pueden mapear."""
 
         products, stock_map = self._build_fracc_stock_cache()
-        if not self.orders_db.exists():
-            return []
-        cn = db.connect("pedidos")
-        cur = cn.cursor()
-        try:
+        with db.connection("pedidos") as cn:
+            cur = cn.cursor()
             rows = cur.execute(
                 """
                 SELECT linea, descripcion, cantidad
@@ -247,8 +220,6 @@ class DashboardRepo:
                 """,
                 (int(oc_id),),
             ).fetchall()
-        finally:
-            cn.close()
 
         out: list[dict] = []
         for row in rows:
@@ -290,95 +261,91 @@ class DashboardRepo:
     def _ensure_dashboard_state_storage(self) -> None:
         """Crea las tablas PostgreSQL que guardan el estado propio del dashboard."""
 
-        cn = self._connect_fracc()
-        db.run_ddl(cn,
-            """
-            CREATE TABLE IF NOT EXISTS dashboard_payment_flags(
-                lot_id INTEGER PRIMARY KEY,
-                paid INTEGER NOT NULL DEFAULT 0,
-                updated_ts TEXT
-            );
+        with db.connection("fraccionadora") as cn:
+            db.run_ddl(cn,
+                """
+                CREATE TABLE IF NOT EXISTS dashboard_payment_flags(
+                    lot_id INTEGER PRIMARY KEY,
+                    paid INTEGER NOT NULL DEFAULT 0,
+                    updated_ts TEXT
+                );
 
-            CREATE TABLE IF NOT EXISTS dashboard_payment_details(
-                id BIGSERIAL PRIMARY KEY,
-                payment_group_id TEXT,
-                lot_id INTEGER NOT NULL,
-                proveedor TEXT,
-                factura TEXT,
-                monto_gs REAL NOT NULL DEFAULT 0,
-                fecha_pago TEXT,
-                medio TEXT,
-                referencia TEXT,
-                nro_deposito TEXT,
-                nro_recibo_dinero TEXT,
-                observacion TEXT,
-                facturas_grupo_json TEXT,
-                total_grupo_gs REAL NOT NULL DEFAULT 0,
-                ts_registro TEXT,
-                ts_modificacion TEXT
-            );
+                CREATE TABLE IF NOT EXISTS dashboard_payment_details(
+                    id BIGSERIAL PRIMARY KEY,
+                    payment_group_id TEXT,
+                    lot_id INTEGER NOT NULL,
+                    proveedor TEXT,
+                    factura TEXT,
+                    monto_gs REAL NOT NULL DEFAULT 0,
+                    fecha_pago TEXT,
+                    medio TEXT,
+                    referencia TEXT,
+                    nro_deposito TEXT,
+                    nro_recibo_dinero TEXT,
+                    observacion TEXT,
+                    facturas_grupo_json TEXT,
+                    total_grupo_gs REAL NOT NULL DEFAULT 0,
+                    ts_registro TEXT,
+                    ts_modificacion TEXT
+                );
 
-            CREATE UNIQUE INDEX IF NOT EXISTS idx_dash_payment_detail_group_lot
-                ON dashboard_payment_details(payment_group_id, lot_id);
+                CREATE UNIQUE INDEX IF NOT EXISTS idx_dash_payment_detail_group_lot
+                    ON dashboard_payment_details(payment_group_id, lot_id);
 
-            CREATE TABLE IF NOT EXISTS dashboard_collection_flags(
-                status_key TEXT PRIMARY KEY,
-                invoice_id INTEGER NOT NULL,
-                invoice_ts TEXT,
-                invoice_no TEXT,
-                collected INTEGER NOT NULL DEFAULT 0,
-                updated_ts TEXT
-            );
+                CREATE TABLE IF NOT EXISTS dashboard_collection_flags(
+                    status_key TEXT PRIMARY KEY,
+                    invoice_id INTEGER NOT NULL,
+                    invoice_ts TEXT,
+                    invoice_no TEXT,
+                    collected INTEGER NOT NULL DEFAULT 0,
+                    updated_ts TEXT
+                );
 
-            CREATE TABLE IF NOT EXISTS dashboard_collection_details(
-                id BIGSERIAL PRIMARY KEY,
-                invoice_id INTEGER NOT NULL,
-                invoice_ts TEXT,
-                invoice_no TEXT,
-                cliente TEXT,
-                monto_total_gs REAL NOT NULL DEFAULT 0,
-                monto_total_ret_gs REAL NOT NULL DEFAULT 0,
-                fecha_cobro TEXT,
-                medio TEXT,
-                nro_cheque TEXT,
-                nro_deposito TEXT,
-                referencia TEXT,
-                observacion TEXT,
-                ts_registro TEXT,
-                ts_modificacion TEXT
-            );
+                CREATE TABLE IF NOT EXISTS dashboard_collection_details(
+                    id BIGSERIAL PRIMARY KEY,
+                    invoice_id INTEGER NOT NULL,
+                    invoice_ts TEXT,
+                    invoice_no TEXT,
+                    cliente TEXT,
+                    monto_total_gs REAL NOT NULL DEFAULT 0,
+                    monto_total_ret_gs REAL NOT NULL DEFAULT 0,
+                    fecha_cobro TEXT,
+                    medio TEXT,
+                    nro_cheque TEXT,
+                    nro_deposito TEXT,
+                    referencia TEXT,
+                    observacion TEXT,
+                    ts_registro TEXT,
+                    ts_modificacion TEXT
+                );
 
-            CREATE UNIQUE INDEX IF NOT EXISTS idx_dash_collection_detail_invoice
-                ON dashboard_collection_details(invoice_id, invoice_ts, invoice_no);
-            """
-        )
-        cn.commit()
-        cn.close()
+                CREATE UNIQUE INDEX IF NOT EXISTS idx_dash_collection_detail_invoice
+                    ON dashboard_collection_details(invoice_id, invoice_ts, invoice_no);
+                """
+            )
         self._migrate_dashboard_state_from_json()
         self._sync_payment_flags_from_details()
 
     def _ensure_local_check_usage_storage(self) -> None:
         """Crea el registro local de cheques usados desde el dashboard."""
 
-        cn = self._connect_fracc()
-        db.run_ddl(cn,
-            """
-            CREATE TABLE IF NOT EXISTS dashboard_used_checks(
-                id BIGSERIAL PRIMARY KEY,
-                chequera_id TEXT NOT NULL,
-                cheque_no TEXT NOT NULL,
-                serie TEXT NOT NULL DEFAULT '',
-                referencia TEXT,
-                payment_group_id TEXT,
-                used_ts TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-            );
+        with db.connection("fraccionadora") as cn:
+            db.run_ddl(cn,
+                """
+                CREATE TABLE IF NOT EXISTS dashboard_used_checks(
+                    id BIGSERIAL PRIMARY KEY,
+                    chequera_id TEXT NOT NULL,
+                    cheque_no TEXT NOT NULL,
+                    serie TEXT NOT NULL DEFAULT '',
+                    referencia TEXT,
+                    payment_group_id TEXT,
+                    used_ts TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+                );
 
-            CREATE UNIQUE INDEX IF NOT EXISTS idx_dash_used_checks_unique
-                ON dashboard_used_checks(chequera_id, cheque_no, serie);
-            """
-        )
-        cn.commit()
-        cn.close()
+                CREATE UNIQUE INDEX IF NOT EXISTS idx_dash_used_checks_unique
+                    ON dashboard_used_checks(chequera_id, cheque_no, serie);
+                """
+            )
 
     def _migrate_dashboard_state_from_json(self) -> None:
         """Migra archivos JSON legacy a las tablas actuales si todavia existen."""
@@ -392,7 +359,7 @@ class DashboardRepo:
                         try:
                             lot_id = int(str(k).strip())
                             if lot_id not in existing_flags:
-                                self.save_payment_flag(lot_id, bool(v), sync_legacy=False)
+                                self.save_payment_flag(lot_id, bool(v))
                         except Exception:
                             continue
             except Exception:
@@ -442,16 +409,15 @@ class DashboardRepo:
         """Marca como pagadas las facturas que ya tienen detalle de pago guardado."""
 
         try:
-            cn = self._connect_fracc()
-            cur = cn.cursor()
-            rows = cur.execute(
-                """
-                SELECT DISTINCT lot_id
-                FROM dashboard_payment_details
-                WHERE COALESCE(lot_id, 0) > 0;
-                """
-            ).fetchall()
-            cn.close()
+            with db.connection("fraccionadora") as cn:
+                cur = cn.cursor()
+                rows = cur.execute(
+                    """
+                    SELECT DISTINCT lot_id
+                    FROM dashboard_payment_details
+                    WHERE COALESCE(lot_id, 0) > 0;
+                    """
+                ).fetchall()
         except Exception:
             return
         for (lot_id,) in rows:
@@ -459,24 +425,6 @@ class DashboardRepo:
                 self.save_payment_flag(int(lot_id), True)
             except Exception:
                 continue
-
-    def _write_legacy_payment_flag(self, lot_id: int, paid: bool) -> None:
-        """Mantiene compatibilidad escribiendo el JSON legacy de pagos."""
-
-        try:
-            PAYMENTS_JSON.parent.mkdir(parents=True, exist_ok=True)
-            raw = {}
-            if PAYMENTS_JSON.exists():
-                try:
-                    loaded = json.loads(PAYMENTS_JSON.read_text(encoding="utf-8"))
-                    if isinstance(loaded, dict):
-                        raw = loaded
-                except Exception:
-                    raw = {}
-            raw[str(int(lot_id))] = bool(paid)
-            PAYMENTS_JSON.write_text(json.dumps(raw, indent=2, ensure_ascii=False), encoding="utf-8")
-        except Exception:
-            pass
 
     @staticmethod
     def _collection_keys(invoice_id: int, ts: str, nro: str) -> list[str]:
@@ -490,10 +438,11 @@ class DashboardRepo:
     def load_paid_map(self) -> dict[int, bool]:
         """Carga el mapa lot_id -> pagado usado para filtrar compras pendientes."""
 
-        cn = self._connect_fracc()
-        cur = cn.cursor()
-        rows = cur.execute("SELECT lot_id, paid FROM dashboard_payment_flags;").fetchall()
-        cn.close()
+        with db.connection("fraccionadora") as cn:
+            cur = cn.cursor()
+            rows = cur.execute(
+                "SELECT lot_id, paid FROM dashboard_payment_flags;"
+            ).fetchall()
         out: dict[int, bool] = {}
         for lot_id, paid in rows:
             out[int(lot_id)] = bool(paid)
@@ -502,12 +451,11 @@ class DashboardRepo:
     def load_collections_map(self) -> dict[str, bool]:
         """Carga el mapa de facturas de venta marcadas como cobradas."""
 
-        cn = self._connect_fracc()
-        cur = cn.cursor()
-        rows = cur.execute(
-            "SELECT status_key, invoice_id, invoice_ts, invoice_no, collected FROM dashboard_collection_flags;"
-        ).fetchall()
-        cn.close()
+        with db.connection("fraccionadora") as cn:
+            cur = cn.cursor()
+            rows = cur.execute(
+                "SELECT status_key, invoice_id, invoice_ts, invoice_no, collected FROM dashboard_collection_flags;"
+            ).fetchall()
         out: dict[str, bool] = {}
         for status_key, invoice_id, invoice_ts, invoice_no, collected in rows:
             status_val = bool(collected)
@@ -517,25 +465,21 @@ class DashboardRepo:
                 out[key] = status_val
         return out
 
-    def save_payment_flag(self, lot_id: int, paid: bool, sync_legacy: bool = True) -> None:
+    def save_payment_flag(self, lot_id: int, paid: bool) -> None:
         """Marca o desmarca una factura de compra como pagada."""
 
-        cn = self._connect_fracc()
-        cur = cn.cursor()
-        cur.execute(
-            """
-            INSERT INTO dashboard_payment_flags(lot_id, paid, updated_ts)
-            VALUES(%s, %s, CURRENT_TIMESTAMP)
-            ON CONFLICT(lot_id) DO UPDATE SET
-                paid=excluded.paid,
-                updated_ts=CURRENT_TIMESTAMP;
-            """,
-            (int(lot_id), 1 if paid else 0),
-        )
-        cn.commit()
-        cn.close()
-        if sync_legacy:
-            self._write_legacy_payment_flag(lot_id, paid)
+        with db.connection("fraccionadora") as cn:
+            cur = cn.cursor()
+            cur.execute(
+                """
+                INSERT INTO dashboard_payment_flags(lot_id, paid, updated_ts)
+                VALUES(%s, %s, CURRENT_TIMESTAMP)
+                ON CONFLICT(lot_id) DO UPDATE SET
+                    paid=excluded.paid,
+                    updated_ts=CURRENT_TIMESTAMP;
+                """,
+                (int(lot_id), 1 if paid else 0),
+            )
 
     def upsert_payment_detail(self, payload: dict) -> None:
         """Inserta o actualiza el detalle operativo de un pago de compra."""
@@ -546,67 +490,64 @@ class DashboardRepo:
             return
         facturas_grupo = payload.get("facturas_grupo")
         facturas_grupo_json = json.dumps(facturas_grupo, ensure_ascii=False) if facturas_grupo is not None else ""
-        cn = self._connect_fracc()
-        cur = cn.cursor()
-        cur.execute(
-            """
-            INSERT INTO dashboard_payment_details(
-                payment_group_id, lot_id, proveedor, factura, monto_gs, fecha_pago, medio,
-                referencia, nro_deposito, nro_recibo_dinero, observacion, facturas_grupo_json,
-                total_grupo_gs, ts_registro, ts_modificacion
+        with db.connection("fraccionadora") as cn:
+            cur = cn.cursor()
+            cur.execute(
+                """
+                INSERT INTO dashboard_payment_details(
+                    payment_group_id, lot_id, proveedor, factura, monto_gs, fecha_pago, medio,
+                    referencia, nro_deposito, nro_recibo_dinero, observacion, facturas_grupo_json,
+                    total_grupo_gs, ts_registro, ts_modificacion
+                )
+                VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                ON CONFLICT(payment_group_id, lot_id) DO UPDATE SET
+                    proveedor=excluded.proveedor,
+                    factura=excluded.factura,
+                    monto_gs=excluded.monto_gs,
+                    fecha_pago=excluded.fecha_pago,
+                    medio=excluded.medio,
+                    referencia=excluded.referencia,
+                    nro_deposito=excluded.nro_deposito,
+                    nro_recibo_dinero=excluded.nro_recibo_dinero,
+                    observacion=excluded.observacion,
+                    facturas_grupo_json=excluded.facturas_grupo_json,
+                    total_grupo_gs=excluded.total_grupo_gs,
+                    ts_registro=excluded.ts_registro,
+                    ts_modificacion=excluded.ts_modificacion;
+                """,
+                (
+                    payment_group_id,
+                    lot_id,
+                    str(payload.get("proveedor") or ""),
+                    str(payload.get("factura") or ""),
+                    float(payload.get("monto_gs") or 0.0),
+                    str(payload.get("fecha_pago") or ""),
+                    str(payload.get("medio") or ""),
+                    str(payload.get("referencia") or ""),
+                    str(payload.get("nro_deposito") or ""),
+                    str(payload.get("nro_recibo_dinero") or ""),
+                    str(payload.get("observacion") or ""),
+                    facturas_grupo_json,
+                    float(payload.get("total_grupo_gs") or 0.0),
+                    str(payload.get("ts_registro") or ""),
+                    str(payload.get("ts_modificacion") or ""),
+                ),
             )
-            VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
-            ON CONFLICT(payment_group_id, lot_id) DO UPDATE SET
-                proveedor=excluded.proveedor,
-                factura=excluded.factura,
-                monto_gs=excluded.monto_gs,
-                fecha_pago=excluded.fecha_pago,
-                medio=excluded.medio,
-                referencia=excluded.referencia,
-                nro_deposito=excluded.nro_deposito,
-                nro_recibo_dinero=excluded.nro_recibo_dinero,
-                observacion=excluded.observacion,
-                facturas_grupo_json=excluded.facturas_grupo_json,
-                total_grupo_gs=excluded.total_grupo_gs,
-                ts_registro=excluded.ts_registro,
-                ts_modificacion=excluded.ts_modificacion;
-            """,
-            (
-                payment_group_id,
-                lot_id,
-                str(payload.get("proveedor") or ""),
-                str(payload.get("factura") or ""),
-                float(payload.get("monto_gs") or 0.0),
-                str(payload.get("fecha_pago") or ""),
-                str(payload.get("medio") or ""),
-                str(payload.get("referencia") or ""),
-                str(payload.get("nro_deposito") or ""),
-                str(payload.get("nro_recibo_dinero") or ""),
-                str(payload.get("observacion") or ""),
-                facturas_grupo_json,
-                float(payload.get("total_grupo_gs") or 0.0),
-                str(payload.get("ts_registro") or ""),
-                str(payload.get("ts_modificacion") or ""),
-            ),
-        )
-        cn.commit()
-        cn.close()
 
     def load_payment_details(self) -> list[dict]:
         """Carga el historial de pagos registrados desde el dashboard."""
 
-        cn = self._connect_fracc()
-        cur = cn.cursor()
-        rows = cur.execute(
-            """
-            SELECT payment_group_id, lot_id, proveedor, factura, monto_gs, fecha_pago, medio,
-                   referencia, nro_deposito, nro_recibo_dinero, observacion, facturas_grupo_json,
-                   total_grupo_gs, ts_registro, ts_modificacion
-            FROM dashboard_payment_details
-            ORDER BY fecha_pago DESC, ts_registro DESC, proveedor DESC, factura DESC;
-            """
-        ).fetchall()
-        cn.close()
+        with db.connection("fraccionadora") as cn:
+            cur = cn.cursor()
+            rows = cur.execute(
+                """
+                SELECT payment_group_id, lot_id, proveedor, factura, monto_gs, fecha_pago, medio,
+                       referencia, nro_deposito, nro_recibo_dinero, observacion, facturas_grupo_json,
+                       total_grupo_gs, ts_registro, ts_modificacion
+                FROM dashboard_payment_details
+                ORDER BY fecha_pago DESC, ts_registro DESC, proveedor DESC, factura DESC;
+                """
+            ).fetchall()
         out: list[dict] = []
         for row in rows:
             item = {key: row[key] for key in row.keys()}
@@ -631,55 +572,52 @@ class DashboardRepo:
     def load_available_payment_checks(self) -> list[dict]:
         """Lista cheques disponibles en bancos, excluyendo los ya usados aqui."""
 
-        cn = self._connect_fracc()
-        cur = cn.cursor()
         try:
-            if not db.table_exists(cn, "bank_checkbooks"):
-                cn.close()
-                return []
-            cols = db.table_columns(cn, "bank_checkbooks")
-            if "bank_id" in cols and db.table_exists(cn, "banks"):
-                if "formato_chequera" in cols and "tipo_cheque" in cols:
-                    rows = cur.execute(
-                        """
-                        SELECT c.chequera_id, c.bank_id, b.banco_nombre, b.nro_cuenta,
-                               c.formato_chequera, c.tipo_cheque, c.serie, c.nro_inicio, c.nro_fin
-                        FROM bank_checkbooks c
-                        JOIN banks b ON b.bank_id = c.bank_id
-                        ORDER BY b.banco_nombre, b.nro_cuenta, c.nro_inicio, c.nro_fin;
-                        """
-                    ).fetchall()
+            with db.connection("fraccionadora") as cn:
+                cur = cn.cursor()
+                if not db.table_exists(cn, "bank_checkbooks"):
+                    return []
+                cols = db.table_columns(cn, "bank_checkbooks")
+                if "bank_id" in cols and db.table_exists(cn, "banks"):
+                    if "formato_chequera" in cols and "tipo_cheque" in cols:
+                        rows = cur.execute(
+                            """
+                            SELECT c.chequera_id, c.bank_id, b.banco_nombre, b.nro_cuenta,
+                                   c.formato_chequera, c.tipo_cheque, c.serie, c.nro_inicio, c.nro_fin
+                            FROM bank_checkbooks c
+                            JOIN banks b ON b.bank_id = c.bank_id
+                            ORDER BY b.banco_nombre, b.nro_cuenta, c.nro_inicio, c.nro_fin;
+                            """
+                        ).fetchall()
+                    else:
+                        rows = cur.execute(
+                            """
+                            SELECT c.chequera_id, c.bank_id, b.banco_nombre, b.nro_cuenta,
+                                   c.formulario_tipo, c.nro_inicio, c.nro_fin
+                            FROM bank_checkbooks c
+                            JOIN banks b ON b.bank_id = c.bank_id
+                            ORDER BY b.banco_nombre, b.nro_cuenta, c.nro_inicio, c.nro_fin;
+                            """
+                        ).fetchall()
                 else:
                     rows = cur.execute(
                         """
-                        SELECT c.chequera_id, c.bank_id, b.banco_nombre, b.nro_cuenta,
-                               c.formulario_tipo, c.nro_inicio, c.nro_fin
-                        FROM bank_checkbooks c
-                        JOIN banks b ON b.bank_id = c.bank_id
-                        ORDER BY b.banco_nombre, b.nro_cuenta, c.nro_inicio, c.nro_fin;
+                        SELECT chequera_id, '' AS bank_id, banco_nombre, nro_cuenta,
+                               formulario_tipo, nro_inicio, nro_fin
+                        FROM bank_checkbooks
+                        ORDER BY banco_nombre, nro_cuenta, nro_inicio, nro_fin;
                         """
                     ).fetchall()
-            else:
-                rows = cur.execute(
+                used_rows = cur.execute(
                     """
-                    SELECT chequera_id, '' AS bank_id, banco_nombre, nro_cuenta,
-                           formulario_tipo, nro_inicio, nro_fin
-                    FROM bank_checkbooks
-                    ORDER BY banco_nombre, nro_cuenta, nro_inicio, nro_fin;
+                    SELECT DISTINCT referencia
+                    FROM dashboard_payment_details
+                    WHERE LOWER(COALESCE(medio, '')) = 'cheque'
+                      AND TRIM(COALESCE(referencia, '')) <> '';
                     """
                 ).fetchall()
-            used_rows = cur.execute(
-                """
-                SELECT DISTINCT referencia
-                FROM dashboard_payment_details
-                WHERE LOWER(COALESCE(medio, '')) = 'cheque'
-                  AND TRIM(COALESCE(referencia, '')) <> '';
-                """
-            ).fetchall()
         except Exception:
-            cn.close()
             return []
-        cn.close()
 
         used_refs = set()
         for row in used_rows:
@@ -739,9 +677,8 @@ class DashboardRepo:
         if not serie_txt or not cheque_txt.isdigit():
             return None
         cheque_n = int(cheque_txt)
-        cn = self._connect_fracc()
-        cur = cn.cursor()
-        try:
+        with db.connection("fraccionadora") as cn:
+            cur = cn.cursor()
             row = cur.execute(
                 """
                 SELECT c.chequera_id, c.bank_id, b.banco_nombre, b.nro_cuenta,
@@ -781,8 +718,6 @@ class DashboardRepo:
                 "reference_value": f"Cheque: {cheque_txt} | Serie: {serie_txt}",
                 "used": used is not None,
             }
-        finally:
-            cn.close()
 
     def mark_payment_check_used(self, check_data: dict, payment_group_id: str, referencia: str) -> None:
         """Registra un cheque como usado para no ofrecerlo dos veces."""
@@ -792,46 +727,42 @@ class DashboardRepo:
         serie = str(check_data.get("serie") or "").strip().upper()
         if not chequera_id or not cheque_no:
             return
-        cn = self._connect_fracc()
-        cur = cn.cursor()
-        cur.execute(
-            """
-            INSERT INTO dashboard_used_checks(chequera_id, cheque_no, serie, referencia, payment_group_id, used_ts)
-            VALUES(%s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
-            ON CONFLICT(chequera_id, cheque_no, serie) DO UPDATE SET
-                referencia=excluded.referencia,
-                payment_group_id=excluded.payment_group_id,
-                used_ts=CURRENT_TIMESTAMP;
-            """,
-            (chequera_id, cheque_no, serie, str(referencia or ""), str(payment_group_id or "")),
-        )
-        cn.commit()
-        cn.close()
+        with db.connection("fraccionadora") as cn:
+            cur = cn.cursor()
+            cur.execute(
+                """
+                INSERT INTO dashboard_used_checks(chequera_id, cheque_no, serie, referencia, payment_group_id, used_ts)
+                VALUES(%s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
+                ON CONFLICT(chequera_id, cheque_no, serie) DO UPDATE SET
+                    referencia=excluded.referencia,
+                    payment_group_id=excluded.payment_group_id,
+                    used_ts=CURRENT_TIMESTAMP;
+                """,
+                (chequera_id, cheque_no, serie, str(referencia or ""), str(payment_group_id or "")),
+            )
 
     def save_collection_flag(self, invoice_id: int, ts: str, nro: str, collected: bool, raw_key: str | None = None) -> None:
         """Marca o desmarca una factura de venta como cobrada."""
 
-        cn = self._connect_fracc()
-        cur = cn.cursor()
-        keys = [str(raw_key).strip()] if raw_key else self._collection_keys(invoice_id, ts, nro)
-        for key in keys:
-            if not key:
-                continue
-            cur.execute(
-                """
-                INSERT INTO dashboard_collection_flags(status_key, invoice_id, invoice_ts, invoice_no, collected, updated_ts)
-                VALUES(%s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
-                ON CONFLICT(status_key) DO UPDATE SET
-                    invoice_id=excluded.invoice_id,
-                    invoice_ts=excluded.invoice_ts,
-                    invoice_no=excluded.invoice_no,
-                    collected=excluded.collected,
-                    updated_ts=CURRENT_TIMESTAMP;
-                """,
-                (key, int(invoice_id or 0), str(ts or "").strip(), str(nro or "").strip(), 1 if collected else 0),
-            )
-        cn.commit()
-        cn.close()
+        with db.connection("fraccionadora") as cn:
+            cur = cn.cursor()
+            keys = [str(raw_key).strip()] if raw_key else self._collection_keys(invoice_id, ts, nro)
+            for key in keys:
+                if not key:
+                    continue
+                cur.execute(
+                    """
+                    INSERT INTO dashboard_collection_flags(status_key, invoice_id, invoice_ts, invoice_no, collected, updated_ts)
+                    VALUES(%s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
+                    ON CONFLICT(status_key) DO UPDATE SET
+                        invoice_id=excluded.invoice_id,
+                        invoice_ts=excluded.invoice_ts,
+                        invoice_no=excluded.invoice_no,
+                        collected=excluded.collected,
+                        updated_ts=CURRENT_TIMESTAMP;
+                    """,
+                    (key, int(invoice_id or 0), str(ts or "").strip(), str(nro or "").strip(), 1 if collected else 0),
+                )
 
     def upsert_collection_detail(self, payload: dict) -> None:
         """Inserta o actualiza el detalle operativo de un cobro de venta."""
@@ -841,64 +772,61 @@ class DashboardRepo:
         invoice_no = str(payload.get("invoice_no") or "").strip()
         if invoice_id <= 0:
             return
-        cn = self._connect_fracc()
-        cur = cn.cursor()
-        cur.execute(
-            """
-            INSERT INTO dashboard_collection_details(
-                invoice_id, invoice_ts, invoice_no, cliente, monto_total_gs, monto_total_ret_gs,
-                fecha_cobro, medio, nro_cheque, nro_deposito, referencia, observacion,
-                ts_registro, ts_modificacion
+        with db.connection("fraccionadora") as cn:
+            cur = cn.cursor()
+            cur.execute(
+                """
+                INSERT INTO dashboard_collection_details(
+                    invoice_id, invoice_ts, invoice_no, cliente, monto_total_gs, monto_total_ret_gs,
+                    fecha_cobro, medio, nro_cheque, nro_deposito, referencia, observacion,
+                    ts_registro, ts_modificacion
+                )
+                VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                ON CONFLICT(invoice_id, invoice_ts, invoice_no) DO UPDATE SET
+                    cliente=excluded.cliente,
+                    monto_total_gs=excluded.monto_total_gs,
+                    monto_total_ret_gs=excluded.monto_total_ret_gs,
+                    fecha_cobro=excluded.fecha_cobro,
+                    medio=excluded.medio,
+                    nro_cheque=excluded.nro_cheque,
+                    nro_deposito=excluded.nro_deposito,
+                    referencia=excluded.referencia,
+                    observacion=excluded.observacion,
+                    ts_registro=excluded.ts_registro,
+                    ts_modificacion=excluded.ts_modificacion;
+                """,
+                (
+                    invoice_id,
+                    invoice_ts,
+                    invoice_no,
+                    str(payload.get("cliente") or ""),
+                    float(payload.get("monto_total_gs") or 0.0),
+                    float(payload.get("monto_total_ret_gs") or 0.0),
+                    str(payload.get("fecha_cobro") or ""),
+                    str(payload.get("medio") or ""),
+                    str(payload.get("nro_cheque") or ""),
+                    str(payload.get("nro_deposito") or ""),
+                    str(payload.get("referencia") or ""),
+                    str(payload.get("observacion") or ""),
+                    str(payload.get("ts_registro") or ""),
+                    str(payload.get("ts_modificacion") or ""),
+                ),
             )
-            VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
-            ON CONFLICT(invoice_id, invoice_ts, invoice_no) DO UPDATE SET
-                cliente=excluded.cliente,
-                monto_total_gs=excluded.monto_total_gs,
-                monto_total_ret_gs=excluded.monto_total_ret_gs,
-                fecha_cobro=excluded.fecha_cobro,
-                medio=excluded.medio,
-                nro_cheque=excluded.nro_cheque,
-                nro_deposito=excluded.nro_deposito,
-                referencia=excluded.referencia,
-                observacion=excluded.observacion,
-                ts_registro=excluded.ts_registro,
-                ts_modificacion=excluded.ts_modificacion;
-            """,
-            (
-                invoice_id,
-                invoice_ts,
-                invoice_no,
-                str(payload.get("cliente") or ""),
-                float(payload.get("monto_total_gs") or 0.0),
-                float(payload.get("monto_total_ret_gs") or 0.0),
-                str(payload.get("fecha_cobro") or ""),
-                str(payload.get("medio") or ""),
-                str(payload.get("nro_cheque") or ""),
-                str(payload.get("nro_deposito") or ""),
-                str(payload.get("referencia") or ""),
-                str(payload.get("observacion") or ""),
-                str(payload.get("ts_registro") or ""),
-                str(payload.get("ts_modificacion") or ""),
-            ),
-        )
-        cn.commit()
-        cn.close()
 
     def load_collection_details(self) -> list[dict]:
         """Carga el historial de cobros registrados desde el dashboard."""
 
-        cn = self._connect_fracc()
-        cur = cn.cursor()
-        rows = cur.execute(
-            """
-            SELECT invoice_id, invoice_ts, invoice_no, cliente, monto_total_gs, monto_total_ret_gs,
-                   fecha_cobro, medio, nro_cheque, nro_deposito, referencia, observacion,
-                   ts_registro, ts_modificacion
-            FROM dashboard_collection_details
-            ORDER BY ts_registro DESC;
-            """
-        ).fetchall()
-        cn.close()
+        with db.connection("fraccionadora") as cn:
+            cur = cn.cursor()
+            rows = cur.execute(
+                """
+                SELECT invoice_id, invoice_ts, invoice_no, cliente, monto_total_gs, monto_total_ret_gs,
+                       fecha_cobro, medio, nro_cheque, nro_deposito, referencia, observacion,
+                       ts_registro, ts_modificacion
+                FROM dashboard_collection_details
+                ORDER BY ts_registro DESC;
+                """
+            ).fetchall()
         return [{key: row[key] for key in row.keys()} for row in rows]
 
     def save_collection_details(self, rows: list[dict]) -> None:
@@ -951,34 +879,31 @@ class DashboardRepo:
         """Combina sucursales disponibles desde OC, facturas y compras."""
 
         out = set()
-        if self.orders_db.exists():
-            cn = db.connect("pedidos")
+        with db.connection("pedidos") as cn:
             cur = cn.cursor()
             rows = cur.execute(
                 "SELECT DISTINCT COALESCE(sucursal,'') FROM orden_compra WHERE TRIM(COALESCE(sucursal,''))<>''"
             ).fetchall()
             for (s,) in rows:
                 out.add(str(s))
-            cn.close()
-        if self.invoices_db.exists():
-            cn = db.connect("facturas")
+
+        with db.connection("facturas") as cn:
             cur = cn.cursor()
             rows = cur.execute(
                 "SELECT DISTINCT COALESCE(sucursal,'') FROM factura WHERE TRIM(COALESCE(sucursal,''))<>''"
             ).fetchall()
             for (s,) in rows:
                 out.add(str(s))
-            cn.close()
-        cn = db.connect("fraccionadora")
-        cur = cn.cursor()
-        rows = cur.execute(
-            "SELECT DISTINCT COALESCE(proveedor,'') FROM raw_lots WHERE TRIM(COALESCE(proveedor,''))<>''"
-        ).fetchall()
-        for (prov,) in rows:
-            suc = self._sucursal_from_proveedor(str(prov or ""))
-            if suc:
-                out.add(suc)
-        cn.close()
+
+        with db.connection("fraccionadora") as cn:
+            cur = cn.cursor()
+            rows = cur.execute(
+                "SELECT DISTINCT COALESCE(proveedor,'') FROM raw_lots WHERE TRIM(COALESCE(proveedor,''))<>''"
+            ).fetchall()
+            for (prov,) in rows:
+                suc = self._sucursal_from_proveedor(str(prov or ""))
+                if suc:
+                    out.add(suc)
         return sorted(out)
 
     def _load_paid_map(self) -> dict[int, bool]:
@@ -1018,35 +943,34 @@ class DashboardRepo:
         """Calcula total y cantidad de facturas de venta aun no cobradas."""
 
         cobros = self._load_collections_map()
-        cn = db.connect("fraccionadora")
-        cur = cn.cursor()
-        sql = """
-            SELECT
-                si.id,
-                COALESCE(CAST(si.ts AS TEXT),'') AS ts,
-                COALESCE(si.invoice_no,'') AS invoice_no,
-                COALESCE(si.customer,'') AS customer,
-                COALESCE(si.total_gs,0) AS total_gs,
-                COALESCE(si.iva5_gs,0) AS iva5_gs,
-                COALESCE(si.iva10_gs,0) AS iva10_gs
-            FROM sales_invoices si
-            WHERE (%s = '' OR (COALESCE(si.invoice_no,'') LIKE %s OR COALESCE(si.customer,'') LIKE %s))
-              AND (%s = '' OR si.ts::date >= CAST(NULLIF(%s, '') AS date))
-              AND (%s = '' OR si.ts::date <= CAST(NULLIF(%s, '') AS date))
-            ORDER BY si.ts DESC, si.id DESC;
-        """
-        like_search = f"%{search.strip()}%" if search.strip() else ""
-        params = (
-            like_search,
-            like_search,
-            like_search,
-            from_date.strip(),
-            from_date.strip(),
-            to_date.strip(),
-            to_date.strip(),
-        )
-        rows = cur.execute(sql, params).fetchall()
-        cn.close()
+        with db.connection("fraccionadora") as cn:
+            cur = cn.cursor()
+            sql = """
+                SELECT
+                    si.id,
+                    COALESCE(CAST(si.ts AS TEXT),'') AS ts,
+                    COALESCE(si.invoice_no,'') AS invoice_no,
+                    COALESCE(si.customer,'') AS customer,
+                    COALESCE(si.total_gs,0) AS total_gs,
+                    COALESCE(si.iva5_gs,0) AS iva5_gs,
+                    COALESCE(si.iva10_gs,0) AS iva10_gs
+                FROM sales_invoices si
+                WHERE (%s = '' OR (COALESCE(si.invoice_no,'') LIKE %s OR COALESCE(si.customer,'') LIKE %s))
+                  AND (%s = '' OR si.ts::date >= CAST(NULLIF(%s, '') AS date))
+                  AND (%s = '' OR si.ts::date <= CAST(NULLIF(%s, '') AS date))
+                ORDER BY si.ts DESC, si.id DESC;
+            """
+            like_search = f"%{search.strip()}%" if search.strip() else ""
+            params = (
+                like_search,
+                like_search,
+                like_search,
+                from_date.strip(),
+                from_date.strip(),
+                to_date.strip(),
+                to_date.strip(),
+            )
+            rows = cur.execute(sql, params).fetchall()
 
         total = 0.0
         count = 0
@@ -1074,37 +998,36 @@ class DashboardRepo:
         """Lista facturas de venta pendientes para alimentar la tabla de cobros."""
 
         cobros = self._load_collections_map()
-        cn = db.connect("fraccionadora")
-        cur = cn.cursor()
-        sql = """
-            SELECT
-                si.id,
-                COALESCE(CAST(si.ts AS TEXT),'') AS ts,
-                COALESCE(si.invoice_no,'') AS invoice_no,
-                COALESCE(si.customer,'') AS customer,
-                COALESCE(si.gravada5_gs,0) AS gravada5_gs,
-                COALESCE(si.iva5_gs,0) AS iva5_gs,
-                COALESCE(si.gravada10_gs,0) AS gravada10_gs,
-                COALESCE(si.iva10_gs,0) AS iva10_gs,
-                COALESCE(si.total_gs,0) AS total_gs
-            FROM sales_invoices si
-            WHERE (%s = '' OR (COALESCE(si.invoice_no,'') LIKE %s OR COALESCE(si.customer,'') LIKE %s))
-              AND (%s = '' OR si.ts::date >= CAST(NULLIF(%s, '') AS date))
-              AND (%s = '' OR si.ts::date <= CAST(NULLIF(%s, '') AS date))
-            ORDER BY si.ts DESC, si.id DESC;
-        """
-        like_search = f"%{search.strip()}%" if search.strip() else ""
-        params = (
-            like_search,
-            like_search,
-            like_search,
-            from_date.strip(),
-            from_date.strip(),
-            to_date.strip(),
-            to_date.strip(),
-        )
-        rows = cur.execute(sql, params).fetchall()
-        cn.close()
+        with db.connection("fraccionadora") as cn:
+            cur = cn.cursor()
+            sql = """
+                SELECT
+                    si.id,
+                    COALESCE(CAST(si.ts AS TEXT),'') AS ts,
+                    COALESCE(si.invoice_no,'') AS invoice_no,
+                    COALESCE(si.customer,'') AS customer,
+                    COALESCE(si.gravada5_gs,0) AS gravada5_gs,
+                    COALESCE(si.iva5_gs,0) AS iva5_gs,
+                    COALESCE(si.gravada10_gs,0) AS gravada10_gs,
+                    COALESCE(si.iva10_gs,0) AS iva10_gs,
+                    COALESCE(si.total_gs,0) AS total_gs
+                FROM sales_invoices si
+                WHERE (%s = '' OR (COALESCE(si.invoice_no,'') LIKE %s OR COALESCE(si.customer,'') LIKE %s))
+                  AND (%s = '' OR si.ts::date >= CAST(NULLIF(%s, '') AS date))
+                  AND (%s = '' OR si.ts::date <= CAST(NULLIF(%s, '') AS date))
+                ORDER BY si.ts DESC, si.id DESC;
+            """
+            like_search = f"%{search.strip()}%" if search.strip() else ""
+            params = (
+                like_search,
+                like_search,
+                like_search,
+                from_date.strip(),
+                from_date.strip(),
+                to_date.strip(),
+                to_date.strip(),
+            )
+            rows = cur.execute(sql, params).fetchall()
 
         out: list[CollectionRow] = []
         today = date.today()
@@ -1154,45 +1077,42 @@ class DashboardRepo:
     ) -> list[OrderRow]:
         """Lista OC pendientes y calcula prioridad/disponibilidad de entrega."""
 
-        if not self.orders_db.exists():
-            return []
         products, stock_map = self._build_fracc_stock_cache()
-        cn = db.connect("pedidos")
-        cur = cn.cursor()
-        sql = """
-            SELECT
-                oc.id,
-                COALESCE(oc.nro_oc, '') AS nro_oc,
-                COALESCE(oc.sucursal, '') AS sucursal,
-                COALESCE(oc.fecha_pedido, '') AS fecha_pedido,
-                COALESCE(oc.completada, 0) AS completada,
-                COALESCE(oc.monto_total, 0) AS monto_total,
-                COALESCE(SUM(CASE WHEN COALESCE(oi.enviado,0)=0 THEN oi.cantidad ELSE 0 END), 0) AS cant_pend,
-                COALESCE(SUM(CASE WHEN COALESCE(oi.enviado,0)=1 THEN oi.cantidad ELSE 0 END), 0) AS cant_env
-            FROM orden_compra oc
-            LEFT JOIN orden_item oi ON oi.oc_id = oc.id
-            WHERE COALESCE(oc.completada,0) = 0
-            AND (%s = '' OR UPPER(COALESCE(oc.sucursal,'')) = UPPER(%s))
-            AND (%s = '' OR COALESCE(oc.nro_oc,'') LIKE %s)
-            AND (%s = '' OR oc.fecha_pedido::date >= CAST(NULLIF(%s, '') AS date))
-            AND (%s = '' OR oc.fecha_pedido::date <= CAST(NULLIF(%s, '') AS date))
-            GROUP BY oc.id, oc.nro_oc, oc.sucursal, oc.fecha_pedido, oc.completada, oc.monto_total
-            HAVING COALESCE(SUM(CASE WHEN COALESCE(oi.enviado,0)=0 THEN oi.cantidad ELSE 0 END), 0) > 0
-            ORDER BY oc.fecha_pedido ASC NULLS LAST, oc.id DESC;
-        """
-        like_search = f"%{search.strip()}%" if search.strip() else ""
-        params = (
-            sucursal.strip(),
-            sucursal.strip(),
-            like_search,
-            like_search,
-            from_date.strip(),
-            from_date.strip(),
-            to_date.strip(),
-            to_date.strip(),
-        )
-        rows = cur.execute(sql, params).fetchall()
-        cn.close()
+        with db.connection("pedidos") as cn:
+            cur = cn.cursor()
+            sql = """
+                SELECT
+                    oc.id,
+                    COALESCE(oc.nro_oc, '') AS nro_oc,
+                    COALESCE(oc.sucursal, '') AS sucursal,
+                    COALESCE(oc.fecha_pedido, '') AS fecha_pedido,
+                    COALESCE(oc.completada, 0) AS completada,
+                    COALESCE(oc.monto_total, 0) AS monto_total,
+                    COALESCE(SUM(CASE WHEN COALESCE(oi.enviado,0)=0 THEN oi.cantidad ELSE 0 END), 0) AS cant_pend,
+                    COALESCE(SUM(CASE WHEN COALESCE(oi.enviado,0)=1 THEN oi.cantidad ELSE 0 END), 0) AS cant_env
+                FROM orden_compra oc
+                LEFT JOIN orden_item oi ON oi.oc_id = oc.id
+                WHERE COALESCE(oc.completada,0) = 0
+                AND (%s = '' OR UPPER(COALESCE(oc.sucursal,'')) = UPPER(%s))
+                AND (%s = '' OR COALESCE(oc.nro_oc,'') LIKE %s)
+                AND (%s = '' OR oc.fecha_pedido::date >= CAST(NULLIF(%s, '') AS date))
+                AND (%s = '' OR oc.fecha_pedido::date <= CAST(NULLIF(%s, '') AS date))
+                GROUP BY oc.id, oc.nro_oc, oc.sucursal, oc.fecha_pedido, oc.completada, oc.monto_total
+                HAVING COALESCE(SUM(CASE WHEN COALESCE(oi.enviado,0)=0 THEN oi.cantidad ELSE 0 END), 0) > 0
+                ORDER BY oc.fecha_pedido ASC NULLS LAST, oc.id DESC;
+            """
+            like_search = f"%{search.strip()}%" if search.strip() else ""
+            params = (
+                sucursal.strip(),
+                sucursal.strip(),
+                like_search,
+                like_search,
+                from_date.strip(),
+                from_date.strip(),
+                to_date.strip(),
+                to_date.strip(),
+            )
+            rows = cur.execute(sql, params).fetchall()
 
         today = date.today()
         out: list[OrderRow] = []
@@ -1237,37 +1157,36 @@ class DashboardRepo:
 
         # Misma fuente que "Resumen de compras": raw_lots + flags de pago en PostgreSQL.
         paid = self._load_paid_map()
-        cn = db.connect("fraccionadora")
-        cur = cn.cursor()
-        sql = """
-            SELECT
-                rl.id,
-                COALESCE(CAST(rl.ts AS TEXT),'') AS ts,
-                COALESCE(rl.factura,'') AS factura,
-                COALESCE(rl.proveedor,'') AS proveedor,
-                COALESCE(rl.costo_total_gs,0) AS costo_total_gs
-            FROM raw_lots rl
-            WHERE (%s = '' OR rl.ts::date >= CAST(NULLIF(%s, '') AS date))
-              AND (%s = '' OR rl.ts::date <= CAST(NULLIF(%s, '') AS date))
-              AND (
-                    %s = ''
-                    OR COALESCE(rl.factura,'') LIKE %s
-                    OR COALESCE(rl.proveedor,'') LIKE %s
-                  )
-            ORDER BY rl.ts DESC, rl.id DESC;
-        """
-        like_search = f"%{search.strip()}%" if search.strip() else ""
-        params = (
-            from_date.strip(),
-            from_date.strip(),
-            to_date.strip(),
-            to_date.strip(),
-            like_search,
-            like_search,
-            like_search,
-        )
-        rows = cur.execute(sql, params).fetchall()
-        cn.close()
+        with db.connection("fraccionadora") as cn:
+            cur = cn.cursor()
+            sql = """
+                SELECT
+                    rl.id,
+                    COALESCE(CAST(rl.ts AS TEXT),'') AS ts,
+                    COALESCE(rl.factura,'') AS factura,
+                    COALESCE(rl.proveedor,'') AS proveedor,
+                    COALESCE(rl.costo_total_gs,0) AS costo_total_gs
+                FROM raw_lots rl
+                WHERE (%s = '' OR rl.ts::date >= CAST(NULLIF(%s, '') AS date))
+                  AND (%s = '' OR rl.ts::date <= CAST(NULLIF(%s, '') AS date))
+                  AND (
+                        %s = ''
+                        OR COALESCE(rl.factura,'') LIKE %s
+                        OR COALESCE(rl.proveedor,'') LIKE %s
+                      )
+                ORDER BY rl.ts DESC, rl.id DESC;
+            """
+            like_search = f"%{search.strip()}%" if search.strip() else ""
+            params = (
+                from_date.strip(),
+                from_date.strip(),
+                to_date.strip(),
+                to_date.strip(),
+                like_search,
+                like_search,
+                like_search,
+            )
+            rows = cur.execute(sql, params).fetchall()
 
         today = date.today()
         out: list[PaymentRow] = []
@@ -1303,31 +1222,30 @@ class DashboardRepo:
     def trend_data(self) -> tuple[int, int]:
         """Cuenta OC pendientes nuevas en los ultimos 7 y 30 dias."""
 
-        if not self.orders_db.exists():
-            return 0, 0
-        cn = db.connect("pedidos")
-        cur = cn.cursor()
-        d7 = (date.today() - timedelta(days=7)).isoformat()
-        d30 = (date.today() - timedelta(days=30)).isoformat()
-        c7 = cur.execute(
-            """
-            SELECT COUNT(*)
-            FROM orden_compra
-            WHERE COALESCE(completada,0)=0
-              AND fecha_pedido::date >= CAST(%s AS date)
-            """,
-            (d7,),
-        ).fetchone()[0]
-        c30 = cur.execute(
-            """
-            SELECT COUNT(*)
-            FROM orden_compra
-            WHERE COALESCE(completada,0)=0
-              AND fecha_pedido::date >= CAST(%s AS date)
-            """,
-            (d30,),
-        ).fetchone()[0]
-        cn.close()
+        with db.connection("pedidos") as cn:
+            cur = cn.cursor()
+            d7 = (date.today() - timedelta(days=7)).isoformat()
+            d30 = (date.today() - timedelta(days=30)).isoformat()
+            row7 = cur.execute(
+                """
+                SELECT COUNT(*)
+                FROM orden_compra
+                WHERE COALESCE(completada,0)=0
+                  AND fecha_pedido::date >= CAST(%s AS date)
+                """,
+                (d7,),
+            ).fetchone()
+            c7 = row7[0] if row7 else 0
+            row30 = cur.execute(
+                """
+                SELECT COUNT(*)
+                FROM orden_compra
+                WHERE COALESCE(completada,0)=0
+                  AND fecha_pedido::date >= CAST(%s AS date)
+                """,
+                (d30,),
+            ).fetchone()
+            c30 = row30[0] if row30 else 0
         return int(c7 or 0), int(c30 or 0)
 
 

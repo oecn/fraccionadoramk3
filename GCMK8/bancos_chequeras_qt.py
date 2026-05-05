@@ -70,7 +70,7 @@ class BancosRepo:
 
     def _table_columns(self, table_name: str) -> set[str]:
         cur = self.cn.cursor()
-        rows = [{"name": r[0]} for r in db.table_columns(self.cn, {table_name})]
+        rows = [{"name": r[0]} for r in db.table_columns(self.cn, table_name)]
         return {str(row["name"]) for row in rows}
 
     def _migrate_legacy_checkbooks(self) -> None:

@@ -326,7 +326,7 @@ class Repo:
     def ajustar_raw_kg(self, product_id: int, new_kg: float):
         if new_kg < 0:
             raise ValueError("No se admite negativo.")
-        cur = self.cn.cursor()
+        cur = self._cursor()
         cur.execute("SELECT kg FROM raw_stock WHERE product_id=%s;", (product_id,))
         row = cur.fetchone()
         old_kg = row[0] if row else 0.0
@@ -345,7 +345,7 @@ class Repo:
 
     def _init_schema(self):
 
-        cur = self.cn.cursor()
+        cur = self._cursor()
 
         db.run_ddl(self.cn, """
 
@@ -759,7 +759,7 @@ class Repo:
 
     def _ensure_schema_updates(self):
 
-        cur = self.cn.cursor()
+        cur = self._cursor()
 
         cols = db.table_columns(self.cn, "raw_lots")
 
@@ -790,7 +790,7 @@ class Repo:
 
     def _dedupe_products_by_name(self):
 
-        cur = self.cn.cursor()
+        cur = self._cursor()
         cur.execute("SELECT id, name FROM products ORDER BY id;")
         rows = cur.fetchall()
 
@@ -937,7 +937,7 @@ class Repo:
 
     def _ensure_products_name_unique_index(self):
 
-        cur = self.cn.cursor()
+        cur = self._cursor()
         cur.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_products_name_unique ON products(name);")
         self.cn.commit()
 
@@ -945,7 +945,7 @@ class Repo:
 
                     rain_mm: float|None, cloud_pct: float|None, src: str="open-meteo"):
 
-        cur = self.cn.cursor()
+        cur = self._cursor()
 
         cur.execute("""INSERT INTO weather_readings(ts,temp_c,rh_pct,rain_mm,cloud_pct,src)
 
@@ -957,7 +957,7 @@ class Repo:
 
     def latest_weather(self):
 
-        cur = self.cn.cursor()
+        cur = self._cursor()
 
         cur.execute("""SELECT ts, temp_c, rh_pct, rain_mm, cloud_pct, src
 
@@ -967,7 +967,7 @@ class Repo:
 
     def _seed(self):
 
-        cur = self.cn.cursor()
+        cur = self._cursor()
 
         # Insertar materias primas iniciales si no existen
 
@@ -989,18 +989,31 @@ class Repo:
 
     # CRUD Productos
 
+    def _fetch_returning_id(self, cur, operation: str) -> int:
+        row = db.fetchone_required(cur, f"No se pudo obtener el ID generado en {operation}.")
+        return int(row[0])
+
     def add_product(self, name: str):
 
-        cur = self.cn.cursor()
+        self._recover_if_aborted()
+        cur = self._cursor()
 
-        cur.execute("INSERT INTO products(name) VALUES(%s) RETURNING id", (name.strip(),))
-        pid = cur.fetchone()[0]
+        try:
 
-        cur.execute("INSERT INTO raw_stock(product_id, kg) VALUES(%s, 0);", (pid,))
+            cur.execute("INSERT INTO products(name) VALUES(%s) RETURNING id", (name.strip(),))
+            pid = self._fetch_returning_id(cur, "alta de producto")
 
-        self.cn.commit()
+            cur.execute("INSERT INTO raw_stock(product_id, kg) VALUES(%s, 0);", (pid,))
 
-        return pid
+            self.cn.commit()
+
+            return pid
+
+        except Exception:
+
+            self.cn.rollback()
+
+            raise
 
 
 
@@ -1012,11 +1025,22 @@ class Repo:
         except Exception:
             pass
 
+    def _cursor(self):
+        """Devuelve cursor usable; reconecta si la conexion persistente caduco."""
+        self._recover_if_aborted()
+        try:
+            return self.cn.cursor()
+        except Exception:
+            try:
+                self.cn.close()
+            except Exception:
+                pass
+            self.cn = db.connect("fraccionadora")
+            return self.cn.cursor()
+
     def list_products(self):
 
-        self._recover_if_aborted()
-
-        cur = self.cn.cursor()
+        cur = self._cursor()
 
         cur.execute("SELECT id, name FROM products ORDER BY name;")
 
@@ -1026,7 +1050,7 @@ class Repo:
 
     def get_product_id_by_name(self, name: str):
 
-        cur = self.cn.cursor()
+        cur = self._cursor()
 
         cur.execute("SELECT id FROM products WHERE name=%s;", (name,))
 
@@ -1054,7 +1078,7 @@ class Repo:
 
     def list_product_color_styles(self) -> dict[int, dict[str, str]]:
 
-        cur = self.cn.cursor()
+        cur = self._cursor()
         cols = db.table_columns(self.cn, "product_colors")
 
         out: dict[int, dict[str, str]] = {}
@@ -1090,7 +1114,7 @@ class Repo:
         fg = self._validate_hex_color(fg_hex, "Color de letra")
         bg = self._validate_hex_color(bg_hex, "Color de fondo")
 
-        cur = self.cn.cursor()
+        cur = self._cursor()
         cols = db.table_columns(self.cn, "product_colors")
 
         if "color_hex" in cols and "fg_hex" in cols and "bg_hex" in cols:
@@ -1121,7 +1145,7 @@ class Repo:
 
     def clear_product_color_style(self, product_id: int):
 
-        cur = self.cn.cursor()
+        cur = self._cursor()
 
         cur.execute("DELETE FROM product_colors WHERE product_id=%s;", (product_id,))
 
@@ -1139,7 +1163,7 @@ class Repo:
 
         total_kg = bolsa_kg * bolsas
 
-        cur = self.cn.cursor()
+        cur = self._cursor()
 
         cur.execute("UPDATE raw_stock SET kg = kg + %s WHERE product_id=%s;", (total_kg, product_id))
 
@@ -1171,7 +1195,7 @@ class Repo:
 
         kg_total = bolsas * kg_por_bolsa
 
-        cur = self.cn.cursor()
+        cur = self._cursor()
 
         cur.execute("SELECT kg FROM raw_stock WHERE product_id=%s;", (product_id,))
 
@@ -1253,7 +1277,7 @@ class Repo:
 
                              texto:str|None=None, limit:int=200):
 
-        cur = self.cn.cursor()
+        cur = self._cursor()
 
         where = []
 
@@ -1311,7 +1335,7 @@ class Repo:
 
     def get_bag_sale(self, sale_id:int):
 
-        cur = self.cn.cursor()
+        cur = self._cursor()
 
         cur.execute("""
 
@@ -1357,7 +1381,7 @@ class Repo:
 
 
 
-        cur = self.cn.cursor()
+        cur = self._cursor()
 
         # Sumar a stock total de materia prima
 
@@ -1379,7 +1403,7 @@ class Repo:
 
     def listar_lotes_abiertos(self, product_id:int|None=None, solo_abiertos:bool=True):
 
-        cur = self.cn.cursor()
+        cur = self._cursor()
 
         where = []
 
@@ -1429,7 +1453,7 @@ class Repo:
 
         kg_need = kg_requeridos_para_paquetes(gramaje, paquetes)
 
-        cur = self.cn.cursor()
+        cur = self._cursor()
 
 
 
@@ -1501,7 +1525,7 @@ class Repo:
 
         """
 
-        cur = self.cn.cursor()
+        cur = self._cursor()
 
         # Verificar stock
 
@@ -1541,7 +1565,7 @@ class Repo:
 
     def listar_raw_stock(self):
 
-        cur = self.cn.cursor()
+        cur = self._cursor()
 
         cur.execute("""
 
@@ -1562,7 +1586,7 @@ class Repo:
         Guarda el minimo de bolsas para aviso de materia prima baja.
         """
         val = max(0.0, float(min_bolsas))
-        cur = self.cn.cursor()
+        cur = self._cursor()
         cur.execute("""
             INSERT INTO raw_alerts(product_id, min_bolsas)
             VALUES(%s,%s)
@@ -1576,13 +1600,13 @@ class Repo:
         """
         Devuelve {product_id: min_bolsas}.
         """
-        cur = self.cn.cursor()
+        cur = self._cursor()
         cur.execute("SELECT product_id, min_bolsas FROM raw_alerts;")
         return {int(pid): float(val or 0.0) for pid, val in cur.fetchall()}
 
 
     def set_product_bag_display_kg(self, product_id: int, bag_kg: float | None):
-        cur = self.cn.cursor()
+        cur = self._cursor()
         if bag_kg is None:
             cur.execute("DELETE FROM product_bag_display WHERE product_id=%s;", (product_id,))
         else:
@@ -1599,14 +1623,14 @@ class Repo:
 
 
     def get_product_bag_display_map(self) -> dict[int, float]:
-        cur = self.cn.cursor()
+        cur = self._cursor()
         cur.execute("SELECT product_id, bag_kg FROM product_bag_display;")
         return {int(pid): float(val or 0.0) for pid, val in cur.fetchall()}
 
 
     def listar_package_stock(self):
 
-        cur = self.cn.cursor()
+        cur = self._cursor()
 
         cur.execute("""
 
@@ -1630,7 +1654,7 @@ class Repo:
 
             raise ValueError("Precio/IVA inválidos.")
 
-        cur = self.cn.cursor()
+        cur = self._cursor()
         cur.execute(
             "SELECT price_gs, iva FROM package_prices WHERE product_id=%s AND gramaje=%s;",
             (product_id, gramaje),
@@ -1668,7 +1692,7 @@ class Repo:
 
     def get_price(self, product_id:int, gramaje:int):
 
-        cur = self.cn.cursor()
+        cur = self._cursor()
 
         cur.execute("SELECT price_gs, iva FROM package_prices WHERE product_id=%s AND gramaje=%s;",
 
@@ -1699,7 +1723,7 @@ class Repo:
         return out
 
     def list_price_history(self, product_id:int):
-        cur = self.cn.cursor()
+        cur = self._cursor()
         cur.execute(
             """
             SELECT ts, gramaje, price_gs, iva
@@ -1725,7 +1749,7 @@ class Repo:
 
     def get_product_name(self, product_id:int) -> str:
 
-        cur = self.cn.cursor()
+        cur = self._cursor()
 
         cur.execute("SELECT name FROM products WHERE id=%s;", (product_id,))
 
@@ -1761,75 +1785,77 @@ class Repo:
 
 
 
-        cur = self.cn.cursor()
+        self._recover_if_aborted()
+
+        cur = self._cursor()
 
 
-
-        # 1) Validar stock y precios configurados
-
-        faltan_precios = []
-
-        for pid, g, qty in items:
-
-            if qty <= 0: 
-
-                raise ValueError("Cantidades inválidas en la factura.")
-
-            cur.execute("""SELECT paquetes FROM package_stock WHERE product_id=%s AND gramaje=%s;""",(pid,g))
-
-            row = cur.fetchone(); disp = row[0] if row else 0
-
-            if disp < qty:
-
-                raise ValueError(f"Stock insuficiente para producto {pid} {g} g. Disp:{disp}, pide:{qty}.")
-
-            price, iva = self.get_price(pid, g)
-
-            if price is None or iva not in (5,10):
-
-                faltan_precios.append((pid,g))
-
-        if faltan_precios:
-
-            raise ValueError("Faltan precios/IVA para: " + ", ".join([f"{pid}-{g}g" for pid,g in faltan_precios]))
-
-
-
-        # 2) Calcular totales (precio IVA incluido)
-
-        grav5 = iva5 = grav10 = iva10 = total = 0.0
-
-        lineas = []  # (pid,g,qty,price,iva,line_total,base,iva_monto)
-
-        for pid, g, qty in items:
-
-            price, iva = self.get_price(pid, g)
-
-            line_total = price * qty
-
-            base       = line_total / (1.0 + iva/100.0)
-
-            iva_monto  = line_total - base
-
-
-
-            total += line_total
-
-            if iva == 5:
-
-                grav5 += base; iva5 += iva_monto
-
-            else:
-
-                grav10 += base; iva10 += iva_monto
-
-            lineas.append((pid, g, qty, price, iva, line_total, base, iva_monto))
-
-
-
-        # 3) Transacción completa
 
         try:
+
+            # 1) Validar stock y precios configurados
+
+            faltan_precios = []
+
+            for pid, g, qty in items:
+
+                if qty <= 0:
+
+                    raise ValueError("Cantidades inválidas en la factura.")
+
+                cur.execute("""SELECT paquetes FROM package_stock WHERE product_id=%s AND gramaje=%s;""",(pid,g))
+
+                row = cur.fetchone(); disp = row[0] if row else 0
+
+                if disp < qty:
+
+                    raise ValueError(f"Stock insuficiente para producto {pid} {g} g. Disp:{disp}, pide:{qty}.")
+
+                price, iva = self.get_price(pid, g)
+
+                if price is None or iva not in (5,10):
+
+                    faltan_precios.append((pid,g))
+
+            if faltan_precios:
+
+                raise ValueError("Faltan precios/IVA para: " + ", ".join([f"{pid}-{g}g" for pid,g in faltan_precios]))
+
+
+
+            # 2) Calcular totales (precio IVA incluido)
+
+            grav5 = iva5 = grav10 = iva10 = total = 0.0
+
+            lineas = []  # (pid,g,qty,price,iva,line_total,base,iva_monto)
+
+            for pid, g, qty in items:
+
+                price, iva = self.get_price(pid, g)
+
+                line_total = price * qty
+
+                base       = line_total / (1.0 + iva/100.0)
+
+                iva_monto  = line_total - base
+
+
+
+                total += line_total
+
+                if iva == 5:
+
+                    grav5 += base; iva5 += iva_monto
+
+                else:
+
+                    grav10 += base; iva10 += iva_monto
+
+                lineas.append((pid, g, qty, price, iva, line_total, base, iva_monto))
+
+
+
+            # 3) Transacción completa
 
             self.cn.execute("BEGIN")
 
@@ -1849,7 +1875,8 @@ class Repo:
 
                                                gravada5_gs, iva5_gs, gravada10_gs, iva10_gs, total_gs)
 
-                    VALUES(%s,%s,%s,%s,%s,%s,%s,%s);
+                    VALUES(%s,%s,%s,%s,%s,%s,%s,%s)
+                    RETURNING id;
 
                 """, (fecha, invoice_no or "", customer or "", grav5, iva5, grav10, iva10, total))
 
@@ -1861,13 +1888,14 @@ class Repo:
 
                                                gravada5_gs, iva5_gs, gravada10_gs, iva10_gs, total_gs)
 
-                    VALUES(%s,%s,%s,%s,%s,%s,%s);
+                    VALUES(%s,%s,%s,%s,%s,%s,%s)
+                    RETURNING id;
 
                 """, (invoice_no or "", customer or "", grav5, iva5, grav10, iva10, total))
 
 
 
-            invoice_id = cur.fetchone()[0]
+            invoice_id = self._fetch_returning_id(cur, "alta de factura")
 
 
 
@@ -1926,7 +1954,7 @@ class Repo:
 
     def get_invoice_header(self, invoice_id:int):
 
-        cur = self.cn.cursor()
+        cur = self._cursor()
         cur.execute("""
             SELECT id, ts, invoice_no, customer,
                    gravada5_gs, iva5_gs, gravada10_gs, iva10_gs, total_gs
@@ -1945,7 +1973,7 @@ class Repo:
         if "|" in txt:
             txt = txt.split("|", 1)[0].strip()
 
-        cur = self.cn.cursor()
+        cur = self._cursor()
         if txt.isdigit():
             cur.execute("""
                 SELECT id, ts, invoice_no, customer,
@@ -1974,7 +2002,7 @@ class Repo:
 
     def list_invoice_lookup_values(self, limit:int=200):
 
-        cur = self.cn.cursor()
+        cur = self._cursor()
         cur.execute("""
             SELECT id, ts, invoice_no, customer
             FROM sales_invoices
@@ -1991,7 +2019,7 @@ class Repo:
 
     def listar_items_factura_para_credito(self, invoice_id:int):
 
-        cur = self.cn.cursor()
+        cur = self._cursor()
         cur.execute("""
             SELECT sii.id,
                    sii.product_id,
@@ -2022,7 +2050,7 @@ class Repo:
         if not items:
             raise ValueError("No hay ítems para acreditar.")
 
-        cur = self.cn.cursor()
+        cur = self._cursor()
         grav5 = iva5 = grav10 = iva10 = total = 0.0
         lineas = []
 
@@ -2087,7 +2115,7 @@ class Repo:
                     )
                     VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id""", (credit_no or "", invoice_id, customer or "", motivo or "", 1 if reingresa_stock else 0,
                       grav5, iva5, grav10, iva10, total))
-            credit_note_id = cur.fetchone()[0]
+            credit_note_id = self._fetch_returning_id(cur, "alta de nota de credito")
 
             for invoice_item_id, product_id, gramaje, qty, price_gs, iva, line_total, base, iva_monto in lineas:
                 cur.execute("""
@@ -2131,7 +2159,7 @@ class Repo:
 
         """
 
-        cur = self.cn.cursor()
+        cur = self._cursor()
 
         cur.execute("""
 
@@ -2168,7 +2196,7 @@ class Repo:
         if not motivo_txt:
             raise ValueError("Debe indicar el motivo de la modificación.")
 
-        cur = self.cn.cursor()
+        cur = self._cursor()
         cur.execute("""
             SELECT id, invoice_id, product_id, gramaje, cantidad, price_gs, iva, line_total
             FROM sales_invoice_items
@@ -2284,7 +2312,7 @@ class Repo:
 
         """
 
-        cur = self.cn.cursor()
+        cur = self._cursor()
 
         cur.execute("""
 
@@ -2310,7 +2338,7 @@ class Repo:
 
     def ajustar_paquetes(self, product_id: int, gramaje: int, new_paq: int):
         if new_paq < 0: raise ValueError("No se admite negativo.")
-        cur = self.cn.cursor()
+        cur = self._cursor()
         cur.execute("SELECT paquetes FROM package_stock WHERE product_id=%s AND gramaje=%s;", (product_id, gramaje))
         row = cur.fetchone()
         old_paq = int(row[0]) if row else 0
@@ -2328,7 +2356,7 @@ class Repo:
 
     def listar_ajustes(self, desde:str|None=None, hasta:str|None=None,
                         product_id:int|None=None, kind:str|None=None, limit:int=500):
-        cur = self.cn.cursor()
+        cur = self._cursor()
         where = ["1=1"]
         params = []
         if product_id:
@@ -2367,7 +2395,7 @@ class Repo:
 
         """
 
-        cur = self.cn.cursor()
+        cur = self._cursor()
 
         sql = """
 
@@ -2417,7 +2445,7 @@ class Repo:
         """
         Devuelve historial de costos por kg de lotes de un producto, ordenado por fecha.
         """
-        cur = self.cn.cursor()
+        cur = self._cursor()
         sql = """
             SELECT rl.id, rl.ts, rl.lote, rl.costo_kg_gs,
                    rl.kg_inicial, rl.costo_total_gs
@@ -2440,7 +2468,7 @@ class Repo:
 
         """
 
-        cur = self.cn.cursor()
+        cur = self._cursor()
 
         cur.execute("""
 
@@ -2464,7 +2492,7 @@ class Repo:
 
     def get_last_cost_kg(self, product_id:int):
 
-        cur = self.cn.cursor()
+        cur = self._cursor()
 
         cur.execute("""
             SELECT rl.costo_kg_gs
@@ -2498,7 +2526,7 @@ class Repo:
 
         """
 
-        cur = self.cn.cursor()
+        cur = self._cursor()
 
         cur.execute("""
 
@@ -2536,109 +2564,118 @@ class Repo:
 
         kg_need = kg_requeridos_para_paquetes(gramaje, paquetes)
 
-        cur = self.cn.cursor()
+        self._recover_if_aborted()
+
+        cur = self._cursor()
+
+
+        try:
+
+            # Validar lote
+
+            cur.execute("SELECT product_id, kg_saldo, cerrado FROM raw_lots WHERE id=%s;", (lot_id,))
+
+            row = cur.fetchone()
+
+            if not row:
+
+                raise ValueError(f"Lote {lot_id} no encontrado.")
+
+            prod_lot, kg_saldo, cerrado = int(row[0]), float(row[1] or 0.0), int(row[2] or 0)
+
+            if prod_lot != product_id:
+
+                raise ValueError("El lote seleccionado no corresponde al producto.")
+
+            if cerrado:
+
+                raise ValueError("El lote seleccionado está cerrado.")
 
 
 
-        # Validar lote
+            # Actualizar saldo del lote y stock global
 
-        cur.execute("SELECT product_id, kg_saldo, cerrado FROM raw_lots WHERE id=%s;", (lot_id,))
+            nuevo_saldo = kg_saldo - kg_need
 
-        row = cur.fetchone()
+            cur.execute("UPDATE raw_lots SET kg_saldo=%s WHERE id=%s;", (nuevo_saldo, lot_id))
 
-        if not row:
-
-            raise ValueError(f"Lote {lot_id} no encontrado.")
-
-        prod_lot, kg_saldo, cerrado = int(row[0]), float(row[1] or 0.0), int(row[2] or 0)
-
-        if prod_lot != product_id:
-
-            raise ValueError("El lote seleccionado no corresponde al producto.")
-
-        if cerrado:
-
-            raise ValueError("El lote seleccionado está cerrado.")
+            cur.execute("UPDATE raw_stock SET kg = kg - %s WHERE product_id=%s;", (kg_need, product_id))
 
 
 
-        # Actualizar saldo del lote y stock global
+            # Registrar fraccionamiento con fecha
 
-        nuevo_saldo = kg_saldo - kg_need
+            if fecha:
 
-        cur.execute("UPDATE raw_lots SET kg_saldo=%s WHERE id=%s;", (nuevo_saldo, lot_id))
+                if len(fecha.strip()) == 10:
 
-        cur.execute("UPDATE raw_stock SET kg = kg - %s WHERE product_id=%s;", (kg_need, product_id))
+                    fecha = fecha.strip() + " 00:00:00"
+
+                cur.execute("""
+
+                    INSERT INTO fractionations(ts, product_id, gramaje, paquetes, kg_consumidos)
+
+                    VALUES(%s,%s,%s,%s,%s) RETURNING id;
+
+                """, (fecha, product_id, gramaje, paquetes, kg_need))
+
+            else:
+
+                cur.execute("""
+
+                    INSERT INTO fractionations(product_id, gramaje, paquetes, kg_consumidos)
+
+                    VALUES(%s,%s,%s,%s) RETURNING id;
+
+                """, (product_id, gramaje, paquetes, kg_need))
 
 
 
-        # Registrar fraccionamiento con fecha
+            frac_id = self._fetch_returning_id(cur, "alta de fraccionamiento")
 
-        if fecha:
 
-            if len(fecha.strip()) == 10:
 
-                fecha = fecha.strip() + " 00:00:00"
+            # Registrar vínculo lote <-> fraccionamiento
 
             cur.execute("""
 
-                INSERT INTO fractionations(ts, product_id, gramaje, paquetes, kg_consumidos)
+                INSERT INTO lot_fractionations(lot_id, fractionation_id, kg_consumidos)
 
-                VALUES(%s,%s,%s,%s,%s) RETURNING id;
+                VALUES(%s,%s,%s);
 
-            """, (fecha, product_id, gramaje, paquetes, kg_need))
+            """, (lot_id, frac_id, kg_need))
 
-        else:
+
+
+            # Sumar paquetes terminados
 
             cur.execute("""
 
-                INSERT INTO fractionations(product_id, gramaje, paquetes, kg_consumidos)
+                INSERT INTO package_stock(product_id, gramaje, paquetes)
 
-                VALUES(%s,%s,%s,%s) RETURNING id;
+                VALUES(%s,%s,%s)
 
-            """, (product_id, gramaje, paquetes, kg_need))
+                ON CONFLICT(product_id,gramaje)
 
+                DO UPDATE SET paquetes = package_stock.paquetes + excluded.paquetes;
 
-
-        frac_id = cur.fetchone()[0]
-
-
-
-        # Registrar vínculo lote <-> fraccionamiento
-
-        cur.execute("""
-
-            INSERT INTO lot_fractionations(lot_id, fractionation_id, kg_consumidos)
-
-            VALUES(%s,%s,%s);
-
-        """, (lot_id, frac_id, kg_need))
+            """, (product_id, gramaje, paquetes))
 
 
 
-        # Sumar paquetes terminados
+            self.cn.commit()
 
-        cur.execute("""
+        except Exception:
 
-            INSERT INTO package_stock(product_id, gramaje, paquetes)
+            self.cn.rollback()
 
-            VALUES(%s,%s,%s)
-
-            ON CONFLICT(product_id,gramaje)
-
-            DO UPDATE SET paquetes = package_stock.paquetes + excluded.paquetes;
-
-        """, (product_id, gramaje, paquetes))
-
-
-
-        self.cn.commit()
+            raise
 
 
 
     def cerrar_lote(self, lot_id:int):
 
-        cur = self.cn.cursor()
+        cur = self._cursor()
 
         cur.execute("UPDATE raw_lots SET cerrado=1 WHERE id=%s;", (lot_id,))
 
@@ -2650,7 +2687,7 @@ class Repo:
 
     def abrir_lote(self, lot_id:int):
 
-        cur = self.cn.cursor()
+        cur = self._cursor()
 
         cur.execute("UPDATE raw_lots SET cerrado=0 WHERE id=%s;", (lot_id,))
 
@@ -2670,7 +2707,7 @@ class Repo:
 
             raise ValueError("El nombre del lote no puede estar vacío.")
 
-        cur = self.cn.cursor()
+        cur = self._cursor()
 
         cur.execute("UPDATE raw_lots SET lote=%s WHERE id=%s;", (nuevo_nombre, lot_id))
 
@@ -2692,7 +2729,7 @@ class Repo:
 
 
 
-        cur = self.cn.cursor()
+        cur = self._cursor()
 
         cur.execute("SELECT id FROM raw_lots WHERE id=%s;", (lot_id,))
 
@@ -2736,7 +2773,7 @@ class Repo:
 
     def listar_mermas_de_lote(self, lot_id:int):
 
-        cur = self.cn.cursor()
+        cur = self._cursor()
 
         cur.execute("""
 
@@ -2756,7 +2793,7 @@ class Repo:
 
     def total_merma_por_lote(self, lot_id:int):
 
-        cur = self.cn.cursor()
+        cur = self._cursor()
 
         cur.execute("SELECT COALESCE(SUM(kg), 0) FROM lot_mermas WHERE lot_id=%s;", (lot_id,))
 
@@ -2768,7 +2805,7 @@ class Repo:
 
     def listar_lotes_con_merma(self, product_id:int|None=None, solo_abiertos:bool=False):
 
-        cur = self.cn.cursor()
+        cur = self._cursor()
 
         sql = """
 
@@ -2828,7 +2865,7 @@ class Repo:
 
     def listar_todos_pkg_stock(self):
 
-        cur = self.cn.cursor()
+        cur = self._cursor()
 
         cur.execute("SELECT id, name FROM products;")
 
@@ -2872,7 +2909,7 @@ class Repo:
 
         """
 
-        cur = self.cn.cursor()
+        cur = self._cursor()
 
         where, params = [], []
 
@@ -2930,7 +2967,7 @@ class Repo:
 
     def get_frac_info(self, frac_id:int):
 
-        cur = self.cn.cursor()
+        cur = self._cursor()
 
         cur.execute("""
 
@@ -2974,7 +3011,7 @@ class Repo:
 
 
 
-        cur = self.cn.cursor()
+        cur = self._cursor()
 
         # 1) Traer fracc original (+ verificar)
 
@@ -3192,7 +3229,7 @@ class Repo:
 
         """
 
-        cur = self.cn.cursor()
+        cur = self._cursor()
 
         cur.execute("SELECT product_id, gramaje, paquetes, kg_consumidos FROM fractionations WHERE id=%s;", (frac_id,))
 
@@ -6168,7 +6205,7 @@ class App(tk.Tk):
 
 
 
-        # ð´ Mover los TOTALES antes del refresh
+        # ð??´ Mover los TOTALES antes del refresh
 
         tot = ttk.Frame(frame); tot.pack(fill="x", padx=6, pady=(0,6))
 

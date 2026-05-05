@@ -2,7 +2,6 @@
 # -*- coding: utf-8 -*-
 import tkinter as tk
 from tkinter import ttk, messagebox
-import json
 import csv
 import os
 import datetime as _dt
@@ -26,7 +25,6 @@ def bag_kg_por_defecto(product_name: str) -> float:
     return 50.0
 
 BASE_DIR = Path(__file__).resolve().parent.parent
-PAGOS_FILE = BASE_DIR / "pagos_compras copy.json"
 FACT_DB_PATH = BASE_DIR / "importadorfactur" / "facturas.db"
 
 
@@ -158,9 +156,8 @@ class TabResumenCompras:
     # ============================
     #  Estado de pagos compartido con dashboard
     # ============================
-    def _ensure_payment_storage(self):
-        cur = self.repo.cn.cursor()
-        db.run_ddl(self.repo.cn,
+    def _ensure_payment_storage(self, cn):
+        db.run_ddl(cn,
             """
             CREATE TABLE IF NOT EXISTS dashboard_payment_flags(
                 lot_id INTEGER PRIMARY KEY,
@@ -191,64 +188,50 @@ class TabResumenCompras:
                 ON dashboard_payment_details(payment_group_id, lot_id);
             """
         )
-        self.repo.cn.commit()
 
     def _load_paid_map_from_db(self):
-        self._ensure_payment_storage()
-        cur = self.repo.cn.cursor()
-        cur.execute("SELECT lot_id, paid FROM dashboard_payment_flags;")
-        return {str(int(lot_id)): bool(paid) for lot_id, paid in cur.fetchall()}
+        with db.connection("fraccionadora") as cn:
+            self._ensure_payment_storage(cn)
+            cur = cn.cursor()
+            cur.execute("SELECT lot_id, paid FROM dashboard_payment_flags;")
+            return {str(int(lot_id)): bool(paid) for lot_id, paid in cur.fetchall()}
 
     def _save_paid_map_to_db(self):
-        self._ensure_payment_storage()
-        cur = self.repo.cn.cursor()
-        for lot_id, paid in self.pagos.items():
-            try:
-                lot_id_int = int(str(lot_id).strip())
-            except Exception:
-                continue
-            cur.execute(
-                """
-                INSERT INTO dashboard_payment_flags(lot_id, paid, updated_ts)
-                VALUES(%s, %s, CURRENT_TIMESTAMP)
-                ON CONFLICT(lot_id) DO UPDATE SET
-                    paid=excluded.paid,
-                    updated_ts=CURRENT_TIMESTAMP;
-                """,
-                (lot_id_int, 1 if bool(paid) else 0),
-            )
-        self.repo.cn.commit()
+        with db.connection("fraccionadora") as cn:
+            self._ensure_payment_storage(cn)
+            cur = cn.cursor()
+            for lot_id, paid in self.pagos.items():
+                try:
+                    lot_id_int = int(str(lot_id).strip())
+                except Exception:
+                    continue
+                cur.execute(
+                    """
+                    INSERT INTO dashboard_payment_flags(lot_id, paid, updated_ts)
+                    VALUES(%s, %s, CURRENT_TIMESTAMP)
+                    ON CONFLICT(lot_id) DO UPDATE SET
+                        paid=excluded.paid,
+                        updated_ts=CURRENT_TIMESTAMP;
+                    """,
+                    (lot_id_int, 1 if bool(paid) else 0),
+                )
 
     def _cargar_pagos(self):
-        pagos_db = {}
         try:
-            pagos_db = self._load_paid_map_from_db()
-        except Exception:
-            pagos_db = {}
-
-        PAGOS_FILE.parent.mkdir(parents=True, exist_ok=True)
-        if not PAGOS_FILE.exists():
-            self.pagos = pagos_db
-            return
-        try:
-            with PAGOS_FILE.open("r", encoding="utf-8") as f:
-                raw = json.load(f)
-                self.pagos = raw if isinstance(raw, dict) else {}
+            self.pagos = self._load_paid_map_from_db()
         except Exception:
             self.pagos = {}
-        self.pagos.update(pagos_db)
 
-    def _guardar_pagos(self):
+    def _guardar_pagos(self, notify=False):
         try:
             self._save_paid_map_to_db()
+            return True
         except Exception as e:
-            print("Error guardando pagos en DB:", e)
-        try:
-            PAGOS_FILE.parent.mkdir(parents=True, exist_ok=True)
-            with PAGOS_FILE.open("w", encoding="utf-8") as f:
-                json.dump(self.pagos, f, indent=2, ensure_ascii=False)
-        except Exception as e:
-            print("Error guardando pagos:", e)
+            if notify:
+                messagebox.showerror("Pagos", f"No se pudo guardar el estado de pago:\n{e}")
+            else:
+                print("Error guardando pagos en DB:", e)
+            return False
 
     # ============================
     #  Cargar compras principales
@@ -450,7 +433,9 @@ class TabResumenCompras:
         rid = str(self.selected_lot_id)
         actual = self.pagos.get(rid, False)
         self.pagos[rid] = not actual
-        self._guardar_pagos()
+        if not self._guardar_pagos(notify=True):
+            self.pagos[rid] = actual
+            return
         self._load_detalle_compra(self.selected_lot_id)
         self._refresh()
 
