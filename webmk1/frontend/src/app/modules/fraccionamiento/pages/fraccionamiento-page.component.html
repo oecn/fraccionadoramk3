@@ -1,0 +1,224 @@
+<main class="layout">
+  <section class="header-band">
+    <div>
+      <span class="eyebrow">OPERACION</span>
+      <h1>Fraccionamiento</h1>
+      <p>Materia prima a paquetes terminados, con consumo calculado por gramaje y trazabilidad por lote.</p>
+    </div>
+    <div class="header-summary" *ngIf="summary() as s">
+      <strong>{{ fmtKg(s.total_raw_kg) }} kg MP</strong>
+      <span>{{ fmtGs(s.total_paquetes) }} paquetes</span>
+    </div>
+  </section>
+
+  <p class="error" *ngIf="error()">{{ error() }}</p>
+  <p class="message" *ngIf="message()">{{ message() }}</p>
+
+  <section class="work-grid">
+    <article class="panel form-panel">
+      <header>Registrar fraccionamiento</header>
+      <div class="form-grid">
+        <label>
+          Producto
+          <select [(ngModel)]="form.product_id" (change)="onProductChange()">
+            <option *ngFor="let p of options().productos" [ngValue]="p.id">{{ p.name }}</option>
+          </select>
+        </label>
+        <label>
+          Gramaje
+          <select [(ngModel)]="form.gramaje" (change)="updatePreview()">
+            <option *ngFor="let g of selectedProduct()?.gramajes || []" [ngValue]="g">{{ g }} g</option>
+          </select>
+        </label>
+        <label>
+          Paquetes a producir
+          <input type="number" min="1" [(ngModel)]="form.paquetes" (input)="updatePreview()">
+        </label>
+        <label>
+          Fecha
+          <input type="date" [(ngModel)]="form.fecha">
+        </label>
+        <label class="wide">
+          Lote opcional
+          <select [(ngModel)]="form.lot_id">
+            <option [ngValue]="null">Sin lote</option>
+            <option *ngFor="let l of lotesDisponibles()" [ngValue]="l.id">
+              ID {{ l.id }} - {{ l.lote || 's/lote' }} - {{ fmtKg(l.kg_saldo) }} kg
+            </option>
+          </select>
+        </label>
+      </div>
+
+      <section class="preview" *ngIf="preview() as p">
+        <div>
+          <span>Consumo estimado</span>
+          <strong>{{ fmtKg(p.kg_consumidos) }} kg</strong>
+        </div>
+        <div>
+          <span>Unidades por paquete</span>
+          <strong>{{ p.unidades_por_paquete }}</strong>
+        </div>
+        <div>
+          <span>Bolsas equivalentes</span>
+          <strong>{{ p.bolsas_eq }}</strong>
+        </div>
+      </section>
+
+      <button type="button" class="primary-action" (click)="registrar()" [disabled]="saving()">
+        {{ saving() ? 'Registrando...' : 'Fraccionar' }}
+      </button>
+    </article>
+
+    <article class="panel">
+      <header>Lotes abiertos del producto</header>
+      <div class="table-wrap compact">
+        <table>
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Lote</th>
+              <th class="num">Kg saldo</th>
+              <th class="num">Costo kg</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let l of lotesDisponibles()">
+              <td>{{ l.id }}</td>
+              <td>{{ l.lote || '-' }}</td>
+              <td class="num">{{ fmtKg(l.kg_saldo) }}</td>
+              <td class="num">{{ fmtGs(l.costo_kg_gs) }}</td>
+            </tr>
+            <tr *ngIf="lotesDisponibles().length === 0">
+              <td colspan="4" class="empty">Sin lotes abiertos para el producto.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </article>
+  </section>
+
+  <section class="filters-panel">
+    <label>
+      Producto
+      <select [(ngModel)]="filters.product_id">
+        <option [ngValue]="null">Todos</option>
+        <option *ngFor="let p of options().productos" [ngValue]="p.id">{{ p.name }}</option>
+      </select>
+    </label>
+    <label>
+      Desde
+      <input type="date" [(ngModel)]="filters.desde">
+    </label>
+    <label>
+      Hasta
+      <input type="date" [(ngModel)]="filters.hasta">
+    </label>
+    <button type="button" class="primary-action" (click)="refresh()" [disabled]="loading()">
+      {{ loading() ? 'Cargando...' : 'Refrescar' }}
+    </button>
+  </section>
+
+  <section class="stock-grid" *ngIf="summary() as s">
+    <article class="panel">
+      <header>Materia prima</header>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Producto</th>
+              <th class="num">Kg disp.</th>
+              <th class="num">Bolsas 50kg</th>
+              <th class="num">Bolsas 25kg</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let row of s.raw_stock">
+              <td>
+                <span class="product-pill" [ngClass]="productPillClass(row.producto)">
+                  <span>{{ row.producto }}</span>
+                </span>
+              </td>
+              <td class="num">{{ fmtKg(row.kg) }}</td>
+              <td class="num">{{ fmtKg(row.bolsas_50) }}</td>
+              <td class="num">{{ fmtKg(row.bolsas_25) }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </article>
+
+    <article class="panel">
+      <header class="panel-header-split">
+        <span>Stock de paquetes</span>
+        <label class="check-filter">
+          <input type="checkbox" [(ngModel)]="showOnlyPackageStock">
+          Solo con stock
+        </label>
+      </header>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Producto</th>
+              <th class="num">g</th>
+              <th class="num">Paquetes</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let row of packageStockRows(s)">
+              <td>
+                <span class="product-pill" [ngClass]="productPillClass(row.producto)">
+                  <span>{{ row.producto }}</span>
+                </span>
+              </td>
+              <td class="num">{{ row.gramaje }}</td>
+              <td class="num">{{ fmtGs(row.paquetes) }}</td>
+            </tr>
+            <tr *ngIf="packageStockRows(s).length === 0">
+              <td colspan="3" class="empty">Sin stock de paquetes.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </article>
+  </section>
+
+  <article class="panel" *ngIf="summary() as s">
+    <header>Historial fraccionamiento</header>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Fecha</th>
+            <th>Producto</th>
+            <th class="num">g</th>
+            <th class="num">Paquetes</th>
+            <th class="num">Kg consumidos</th>
+            <th>Eq. bolsas</th>
+            <th>Lote</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let row of s.history">
+            <td>{{ row.id }}</td>
+            <td>{{ row.fecha }}</td>
+            <td>
+              <span class="product-pill" [ngClass]="productPillClass(row.producto)">
+                <span>{{ row.producto }}</span>
+              </span>
+            </td>
+            <td class="num">{{ row.gramaje }}</td>
+            <td class="num">{{ fmtGs(row.paquetes) }}</td>
+            <td class="num">{{ fmtKg(row.kg_consumidos) }}</td>
+            <td>{{ row.bolsas_eq }}</td>
+            <td>{{ row.lote }}</td>
+          </tr>
+          <tr *ngIf="s.history.length === 0">
+            <td colspan="8" class="empty">Sin registros para el filtro actual.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </article>
+</main>

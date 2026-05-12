@@ -1,0 +1,177 @@
+<main class="layout">
+  <section class="header-band">
+    <div>
+      <span class="eyebrow">TESORERIA</span>
+      <h1>Gastos y egresos</h1>
+      <p>Registro de gastos operativos, pagos varios y egresos con forma de pago.</p>
+    </div>
+    <div class="header-summary">
+      <strong>{{ fmtGs(data().total_gs) }} Gs</strong>
+      <span>{{ data().rows.length }} registros</span>
+    </div>
+  </section>
+
+  <p class="error" *ngIf="error()">{{ error() }}</p>
+  <p class="message" *ngIf="message()">{{ message() }}</p>
+
+  <section class="panel form-panel">
+    <header>Registrar gasto</header>
+    <div class="form-grid expense-grid">
+      <label>
+        Fecha
+        <input type="date" [(ngModel)]="form.fecha">
+      </label>
+      <label>
+        Tipo
+        <select [(ngModel)]="form.tipo" (change)="onTipoChange()">
+          <option *ngFor="let tipo of data().tipos" [value]="tipo">{{ tipo }}</option>
+        </select>
+      </label>
+      <label>
+        Monto
+        <input type="number" min="0" [(ngModel)]="form.monto_gs">
+      </label>
+      <label>
+        Nro factura
+        <input type="text" [(ngModel)]="form.nro_factura">
+      </label>
+      <label>
+        Forma de pago
+        <select [(ngModel)]="form.forma_pago" (change)="onFormaPagoChange()">
+          <option *ngFor="let forma of data().formas_pago" [value]="forma">{{ forma }}</option>
+        </select>
+      </label>
+      <ng-container *ngIf="form.forma_pago === 'Cheque'; else normalRef">
+        <label>
+          Serie
+          <input type="text" [(ngModel)]="cheque.serie" (blur)="validateCheck()" (keyup.enter)="validateCheck()">
+        </label>
+        <label>
+          Nro cheque
+          <input type="text" [(ngModel)]="cheque.numero" (blur)="validateCheck()" (keyup.enter)="validateCheck()">
+        </label>
+        <button type="button" class="primary-action inline" (click)="validateCheck()">Validar</button>
+      </ng-container>
+      <ng-template #normalRef>
+        <label>
+          {{ referenceLabel() }}
+          <input type="text" [(ngModel)]="form.referencia_pago" [disabled]="form.forma_pago === 'Efectivo'">
+        </label>
+      </ng-template>
+      <label class="wide">
+        Descripcion
+        <input type="text" [(ngModel)]="form.descripcion">
+      </label>
+    </div>
+    <p
+      *ngIf="form.forma_pago === 'Cheque' && checkStatus() as status"
+      class="check-status"
+      [class.ok]="status.available"
+      [class.bad]="!status.available"
+    >
+      {{ status.message }}
+    </p>
+    <button type="button" class="primary-action" (click)="registrar()" [disabled]="saving()">
+      {{ saving() ? 'Registrando...' : 'Registrar gasto' }}
+    </button>
+  </section>
+
+  <section class="panel imports-panel">
+    <header>Importar gastos</header>
+    <div class="import-grid">
+      <article class="import-box">
+        <div>
+          <h3>IPS PDF</h3>
+          <input type="file" accept="application/pdf,.pdf" (change)="parseIps($event)" [disabled]="parsingIps() || importingIps()">
+        </div>
+        <div *ngIf="ipsPreview() as ips" class="preview-box" [class.warning]="ips.duplicate">
+          <div><span>Periodo</span><strong>{{ ips.periodo_display || ips.periodo }}</strong></div>
+          <div><span>Fecha</span><strong>{{ ips.fecha }}</strong></div>
+          <div><span>Referencia</span><strong>{{ ips.nro_factura || '-' }}</strong></div>
+          <div><span>Monto</span><strong>{{ fmtGs(ips.monto_gs) }}</strong></div>
+          <p>{{ ips.descripcion }}</p>
+          <button type="button" class="primary-action inline" (click)="importIps()" [disabled]="importingIps() || ips.duplicate">
+            {{ importingIps() ? 'Importando...' : (ips.duplicate ? 'Ya cargado' : 'Importar IPS') }}
+          </button>
+        </div>
+      </article>
+
+      <article class="import-box">
+        <div>
+          <h3>Adelantos / salarios TXT</h3>
+          <input type="file" accept=".txt,.csv,text/plain" (change)="parseRrhh($event)" [disabled]="parsingRrhh() || importingRrhh()">
+        </div>
+        <div *ngIf="rrhhPreview() as rrhh" class="preview-box" [class.warning]="rrhh.unresolved_count > 0">
+          <div><span>Archivo</span><strong>{{ rrhh.file_name }}</strong></div>
+          <div>
+            <span>Fecha</span>
+            <input type="date" [(ngModel)]="rrhh.fecha">
+          </div>
+          <div><span>Filas</span><strong>{{ rrhh.row_count }}</strong></div>
+          <div><span>Total</span><strong>{{ fmtGs(rrhh.total_amount) }}</strong></div>
+          <p *ngIf="rrhh.unresolved_count > 0">{{ rrhh.unresolved_count }} fila(s) con CI sin funcionario.</p>
+          <div class="mini-table">
+            <table>
+              <tbody>
+                <tr *ngFor="let row of rrhh.rows.slice(0, 6)" [class.bad-row]="!row.employee_id">
+                  <td>{{ row.funcionario || row.documento }}</td>
+                  <td>{{ row.concepto }}</td>
+                  <td class="num">{{ fmtGs(row.monto) }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <button type="button" class="primary-action inline" (click)="importRrhh()" [disabled]="importingRrhh() || rrhh.unresolved_count > 0">
+            {{ importingRrhh() ? 'Importando...' : 'Importar RRHH' }}
+          </button>
+        </div>
+      </article>
+    </div>
+  </section>
+
+  <section class="panel">
+    <header>Historial de gastos</header>
+    <section class="filters-panel">
+      <label>
+        Desde
+        <input type="date" [(ngModel)]="filters.desde">
+      </label>
+      <label>
+        Hasta
+        <input type="date" [(ngModel)]="filters.hasta">
+      </label>
+      <button type="button" class="primary-action inline" (click)="refresh()" [disabled]="loading()">
+        {{ loading() ? 'Cargando...' : 'Filtrar' }}
+      </button>
+    </section>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Fecha</th>
+            <th>Tipo</th>
+            <th>Factura</th>
+            <th>Pago</th>
+            <th>Referencia</th>
+            <th>Descripcion</th>
+            <th class="num">Monto</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let row of data().rows">
+            <td>{{ row.fecha }}</td>
+            <td>{{ row.tipo }}</td>
+            <td>{{ row.nro_factura || '-' }}</td>
+            <td>{{ row.forma_pago }}</td>
+            <td>{{ row.referencia_pago || '-' }}</td>
+            <td>{{ row.descripcion || '-' }}</td>
+            <td class="num">{{ fmtGs(row.monto_gs) }}</td>
+          </tr>
+          <tr *ngIf="data().rows.length === 0">
+            <td colspan="7" class="empty">Sin gastos en el rango.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+</main>

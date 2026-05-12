@@ -1,0 +1,208 @@
+<main class="layout">
+  <section class="header-band">
+    <div>
+      <span class="eyebrow">OPERACION</span>
+      <h1>Compra materia prima</h1>
+      <p>Registro de lotes, stock disponible y costo por kg para trazabilidad de fraccionamiento.</p>
+    </div>
+  </section>
+
+  <p class="error" *ngIf="error()">{{ error() }}</p>
+  <p class="message" *ngIf="message()">{{ message() }}</p>
+
+  <section class="panel factura-panel">
+    <header>Cargar factura PDF</header>
+    <div class="factura-upload">
+      <label class="file-picker">
+        <input type="file" accept="application/pdf,.pdf" (change)="onFacturaFileChange($event)">
+        <span>{{ facturaFileName || 'Seleccionar PDF de factura' }}</span>
+      </label>
+      <button type="button" class="primary-action inline" (click)="parseFactura()" [disabled]="parsingFactura()">
+        {{ parsingFactura() ? 'Parseando...' : 'Parsear factura' }}
+      </button>
+    </div>
+
+    <ng-container *ngIf="facturaPreview() as fp">
+      <section class="factura-meta">
+        <div><span>Factura</span><strong>{{ fp.numero || '-' }}</strong></div>
+        <div><span>Proveedor</span><strong>{{ fp.proveedor || '-' }}</strong></div>
+        <div><span>Fecha</span><strong>{{ fp.fecha_emision || '-' }}</strong></div>
+        <div><span>Total</span><strong>{{ fmtGs(fp.total) }}</strong></div>
+        <div><span>Importables</span><strong>{{ importableFacturaItems() }}/{{ fp.items.length }}</strong></div>
+      </section>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Descripcion</th>
+              <th>Producto</th>
+              <th class="num">Kg</th>
+              <th class="num">Bolsas</th>
+              <th class="num">Total</th>
+              <th>Estado</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let item of fp.items" [class.importable]="item.importable" [class.not-importable]="!item.importable">
+              <td>{{ item.descripcion }}</td>
+              <td>{{ item.producto || '-' }}</td>
+              <td class="num">{{ fmtKg(item.kg) }}</td>
+              <td class="num">{{ item.bolsas }}</td>
+              <td class="num">{{ fmtGs(item.total_linea) }}</td>
+              <td>{{ item.importable ? 'OK' : item.message }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <button type="button" class="primary-action" (click)="importarFactura()" [disabled]="importingFactura()">
+        {{ importingFactura() ? 'Importando...' : 'Confirmar carga de factura' }}
+      </button>
+    </ng-container>
+  </section>
+
+  <section class="work-grid">
+    <article class="panel form-panel">
+      <header>Registrar lote</header>
+      <div class="form-grid">
+        <label>
+          Producto
+          <select [(ngModel)]="form.product_id">
+            <option *ngFor="let p of options().productos" [ngValue]="p.id">{{ p.name }}</option>
+          </select>
+        </label>
+        <label>
+          Proveedor
+          <input type="text" [(ngModel)]="form.proveedor">
+        </label>
+        <label>
+          Factura
+          <input type="text" [(ngModel)]="form.factura">
+        </label>
+        <label>
+          Nro. lote
+          <input type="text" [(ngModel)]="form.lote">
+        </label>
+        <label>
+          Kg por bolsa
+          <select [(ngModel)]="form.bolsa_kg" [disabled]="useCustomBagKg">
+            <option *ngFor="let kg of options().bolsa_kg_presets" [ngValue]="kg">{{ kg }} kg</option>
+          </select>
+        </label>
+        <label class="check-filter">
+          <input type="checkbox" [(ngModel)]="useCustomBagKg" (change)="onBagModeChange()">
+          Otro kg
+        </label>
+        <label>
+          Kg otro
+          <input type="number" min="0.001" step="0.001" [(ngModel)]="form.bolsa_kg" [disabled]="!useCustomBagKg">
+        </label>
+        <label>
+          Bolsas
+          <input type="number" min="0.001" step="0.001" [(ngModel)]="form.bolsas">
+        </label>
+        <label>
+          Monto total Gs
+          <input type="number" min="0" [(ngModel)]="form.costo_total_gs">
+        </label>
+      </div>
+
+      <section class="preview">
+        <div>
+          <span>Kg total</span>
+          <strong>{{ fmtKg(kgTotal()) }}</strong>
+        </div>
+        <div>
+          <span>Costo kg</span>
+          <strong>{{ fmtGs(costoKg()) }}</strong>
+        </div>
+        <div>
+          <span>Total compra</span>
+          <strong>{{ fmtGs(form.costo_total_gs) }}</strong>
+        </div>
+      </section>
+
+      <button type="button" class="primary-action" (click)="registrar()" [disabled]="saving()">
+        {{ saving() ? 'Registrando...' : 'Registrar lote' }}
+      </button>
+    </article>
+
+    <article class="panel">
+      <header>Filtro</header>
+      <div class="filter-box">
+        <label>
+          Producto
+          <select [(ngModel)]="filters.product_id" (change)="onFilterProductChange()">
+            <option [ngValue]="null">Todos</option>
+            <option *ngFor="let p of options().productos" [ngValue]="p.id">{{ p.name }}</option>
+          </select>
+        </label>
+        <button type="button" class="primary-action inline" (click)="refresh()" [disabled]="loading()">
+          {{ loading() ? 'Cargando...' : 'Refrescar' }}
+        </button>
+      </div>
+    </article>
+  </section>
+
+  <section class="stock-grid" *ngIf="summary() as s">
+    <article class="panel">
+      <header>Stock de materia prima</header>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Producto</th>
+              <th class="num">Kg disp.</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let row of s.raw_stock">
+              <td>
+                <span class="product-pill" [ngClass]="productPillClass(row.producto)">
+                  <span>{{ row.producto }}</span>
+                </span>
+              </td>
+              <td class="num">{{ fmtKg(row.kg) }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </article>
+
+    <article class="panel">
+      <header>Lotes abiertos</header>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Producto</th>
+              <th>Lote</th>
+              <th>Proveedor</th>
+              <th>Factura</th>
+              <th class="num">Saldo kg</th>
+              <th class="num">Costo kg</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let row of s.lotes_abiertos">
+              <td>
+                <span class="product-pill" [ngClass]="productPillClass(row.producto)">
+                  <span>{{ row.producto }}</span>
+                </span>
+              </td>
+              <td>{{ row.lote || '-' }}</td>
+              <td>{{ row.proveedor || '-' }}</td>
+              <td>{{ row.factura || '-' }}</td>
+              <td class="num">{{ fmtKg(row.kg_saldo) }}</td>
+              <td class="num">{{ fmtGs(row.costo_kg_gs) }}</td>
+            </tr>
+            <tr *ngIf="s.lotes_abiertos.length === 0">
+              <td colspan="6" class="empty">Sin lotes abiertos para el filtro actual.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </article>
+  </section>
+</main>

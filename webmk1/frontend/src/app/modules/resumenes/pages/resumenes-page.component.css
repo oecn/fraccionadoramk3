@@ -1,0 +1,293 @@
+.layout {
+  display: grid;
+  gap: 16px;
+}
+
+.header-band,
+.filters-panel,
+.panel {
+  background: #fff;
+  border: 1px solid #d7e0ec;
+  border-radius: 8px;
+}
+
+.header-band {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 18px;
+}
+
+.eyebrow {
+  color: #0f766e;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+h1 {
+  margin: 4px 0;
+  font-size: 28px;
+}
+
+p {
+  margin: 0;
+}
+
+.header-summary {
+  display: grid;
+  gap: 4px;
+  text-align: right;
+}
+
+.filters-panel {
+  display: flex;
+  align-items: end;
+  gap: 12px;
+  padding: 14px;
+  flex-wrap: wrap;
+}
+
+label {
+  display: grid;
+  gap: 6px;
+  font-weight: 700;
+}
+
+select,
+button {
+  min-height: 38px;
+  border: 1px solid #bfd0e5;
+  border-radius: 7px;
+  background: #fff;
+  padding: 0 12px;
+  font-weight: 700;
+}
+
+button {
+  cursor: pointer;
+}
+
+.primary-action,
+.panel header button {
+  background: #0f766e;
+  border-color: #0f766e;
+  color: #fff;
+}
+
+.check-field {
+  display: flex;
+  align-items: center;
+  min-height: 38px;
+}
+
+.split {
+  display: grid;
+  grid-template-columns: minmax(420px, 0.9fr) minmax(520px, 1.4fr);
+  gap: 16px;
+}
+
+.panel {
+  min-width: 0;
+  overflow: hidden;
+}
+
+.panel header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  border-bottom: 1px solid #e5edf5;
+  font-weight: 800;
+}
+
+.table-wrap {
+  overflow: auto;
+}
+
+.lotes-table {
+  max-height: 620px;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+th,
+td {
+  padding: 10px 12px;
+  border-bottom: 1px solid #e8eef5;
+  white-space: nowrap;
+}
+
+th {
+  background: #f6f9fc;
+  text-align: left;
+}
+
+tbody tr {
+  cursor: pointer;
+}
+
+tbody tr:nth-child(even) {
+  background: #f8fafc;
+}
+
+tbody tr.selected {
+  background: #dff4f1;
+  outline: 2px solid #0f766e;
+  outline-offset: -2px;
+}
+
+tbody tr.negative {
+  color: #b91c1c;
+}
+
+.num {
+  text-align: right;
+}
+
+td small,
+.panel header small {
+  color: #64748b;
+  display: block;
+}
+
+.product-pill {
+  border-radius: 999px;
+  padding: 3px 10px;
+  display: inline-block;
+}
+
+.pill-arroz { background: #cdeebc; color: #087a3a; }
+.pill-poroto { background: #b80f16; color: #fff; }
+.pill-pororo { background: #ffe29a; color: #7a4b00; }
+.pill-locro { background: #bde2f5; color: #075985; }
+.pill-locrillo { background: #b9dce6; color: #164e63; }
+.pill-azucar { background: #e5e7eb; color: #374151; }
+.pill-lenteja { background: #1f5f72; color: #fff; }
+.pill-gall { background: #ffc49e; color: #8a3c12; }
+.pill-default { background: #e5e7eb; color: #374151; }
+
+.detail-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px 18px;
+  padding: 14px 16px;
+}
+
+.detail-grid div {
+  display: grid;
+  gap: 3px;
+}
+
+.detail-grid span,
+.usage span {
+  color: #345;
+  font-size: 12px;
+}
+
+.danger,
+.error {
+  color: #b91c1c;
+}
+
+.success {
+  color: #0f766e;
+}
+
+.usage {
+  display: grid;
+  gap: 6px;
+  padding: 0 16px 14px;
+}
+
+.usage-bar {
+  display: flex;
+  height: 20px;
+  border: 1px solid #8aa07a;
+  background: #f4f7ef;
+}
+
+.usage-bar i {
+  display: block;
+}
+
+.usage-bar .used {
+  background: #4cb050;
+}
+
+.usage-bar .merma {
+  background: #c53030;
+}
+
+.history {
+  padding: 0 16px 16px;
+}
+
+.markup-box {
+  padding: 0 16px 14px;
+}
+
+.markup-box h2 {
+  font-size: 15px;
+  margin: 0 0 8px;
+}
+
+.markup-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 8px;
+}
+
+.markup-grid div {
+  display: grid;
+  gap: 3px;
+  border: 1px solid #d7e0ec;
+  border-radius: 8px;
+  background: #f8fafc;
+  padding: 10px;
+}
+
+.markup-grid span {
+  font-size: 12px;
+  color: #0f766e;
+  font-weight: 800;
+}
+
+.markup-grid small {
+  color: #475569;
+}
+
+.history h2 {
+  font-size: 16px;
+}
+
+.empty {
+  min-height: 240px;
+  display: grid;
+  place-items: center;
+}
+
+@media (max-width: 1100px) {
+  .split {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 720px) {
+  .header-band,
+  .detail-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .header-band {
+    display: grid;
+  }
+
+  .header-summary {
+    text-align: left;
+  }
+}

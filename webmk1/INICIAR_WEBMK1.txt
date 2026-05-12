@@ -1,0 +1,37 @@
+INICIAR WEBMK1
+==============
+
+1) API Python / FastAPI
+-----------------------
+Abrir una terminal en VS Code o PowerShell y ejecutar:
+
+cd C:\Users\osval\Desktop\dev\PDFREADER\GCPDFMK102-POSTGRES\webmk1\backend
+.\.venv\Scripts\python.exe -m uvicorn main:app --reload --host 0.0.0.0 --port 8011
+
+Verificar API:
+http://127.0.0.1:8011/health
+http://192.168.10.12:8011/health
+
+
+2) Web Angular
+--------------
+Abrir otra terminal PowerShell y ejecutar:
+
+cd C:\Users\osval\Desktop\dev\PDFREADER\GCPDFMK102-POSTGRES\webmk1\frontend
+& "C:\Program Files\nodejs\npm.cmd" run start -- --host 0.0.0.0 --port 4300
+
+Abrir navegador:
+http://127.0.0.1:4300
+http://192.168.10.12:4300
+
+
+Notas
+-----
+- No ejecutar webmk1\backend\main.py directamente.
+- El backend FastAPI se levanta con uvicorn.
+- El frontend Angular usa el puerto 4300.
+- El API WebMK1 usa el puerto 8011.
+- El puerto 8010 queda libre para otros procesos o versiones anteriores.
+- Esto no usa el puerto 4200 para no chocar con otro programa.
+- Desde otro dispositivo conectado a la LAN, abrir http://192.168.10.12:4300.
+- Si no abre desde otro dispositivo, permitir los puertos 4300 y 8011 en Firewall de Windows.

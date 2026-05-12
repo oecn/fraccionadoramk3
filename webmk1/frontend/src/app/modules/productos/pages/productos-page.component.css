@@ -1,0 +1,227 @@
+.layout {
+  display: grid;
+  gap: 16px;
+}
+
+.header-band,
+.panel {
+  background: #fff;
+  border: 1px solid #d7e0ec;
+  border-radius: 8px;
+}
+
+.header-band {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 18px;
+}
+
+.eyebrow {
+  color: #0f766e;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+h1 {
+  margin: 4px 0;
+  font-size: 28px;
+}
+
+p {
+  margin: 0;
+}
+
+.header-summary {
+  display: grid;
+  gap: 4px;
+  text-align: right;
+}
+
+.panel {
+  overflow: hidden;
+}
+
+.panel header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  border-bottom: 1px solid #e5edf5;
+  font-weight: 800;
+}
+
+.table-wrap {
+  overflow: auto;
+  max-height: 680px;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+th,
+td {
+  padding: 10px 12px;
+  border-bottom: 1px solid #e8eef5;
+  white-space: nowrap;
+}
+
+th {
+  background: #f6f9fc;
+  text-align: left;
+}
+
+tbody tr:nth-child(even) {
+  background: #f8fafc;
+}
+
+.num {
+  text-align: right;
+}
+
+input,
+select,
+button {
+  min-height: 34px;
+  border: 1px solid #bfd0e5;
+  border-radius: 7px;
+  background: #fff;
+  padding: 0 10px;
+  font-weight: 700;
+}
+
+input {
+  width: 120px;
+  text-align: right;
+}
+
+button {
+  cursor: pointer;
+}
+
+.primary-action {
+  background: #0f766e;
+  border-color: #0f766e;
+  color: #fff;
+}
+
+.product-pill {
+  border-radius: 999px;
+  padding: 3px 10px;
+  display: inline-block;
+}
+
+.pill-arroz { background: #cdeebc; color: #087a3a; }
+.pill-poroto { background: #b80f16; color: #fff; }
+.pill-pororo { background: #ffe29a; color: #7a4b00; }
+.pill-locro { background: #bde2f5; color: #075985; }
+.pill-locrillo { background: #b9dce6; color: #164e63; }
+.pill-azucar { background: #e5e7eb; color: #374151; }
+.pill-lenteja { background: #1f5f72; color: #fff; }
+.pill-gall { background: #ffc49e; color: #8a3c12; }
+.pill-default { background: #e5e7eb; color: #374151; }
+
+.error {
+  color: #b91c1c;
+}
+
+.success {
+  color: #0f766e;
+}
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  display: grid;
+  place-items: center;
+  background: rgba(15, 23, 42, 0.35);
+  padding: 20px;
+}
+
+.history-modal {
+  width: min(760px, 100%);
+  max-height: 86vh;
+  overflow: auto;
+  background: #fff;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  box-shadow: 0 18px 45px rgba(15, 23, 42, 0.22);
+}
+
+.history-modal header {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px;
+  border-bottom: 1px solid #e5edf5;
+}
+
+.history-modal header div {
+  display: grid;
+  gap: 3px;
+}
+
+.history-modal header span {
+  color: #64748b;
+  font-size: 13px;
+}
+
+.history-modal p {
+  padding: 16px;
+}
+
+.chart {
+  padding: 16px;
+}
+
+.chart svg {
+  width: 100%;
+  height: 260px;
+  background: #f8fafc;
+  border: 1px solid #d7e0ec;
+  border-radius: 8px;
+}
+
+.chart line {
+  stroke: #cbd5e1;
+  stroke-width: 0.5;
+}
+
+.chart polyline {
+  fill: none;
+  stroke: #0f766e;
+  stroke-width: 2.3;
+  vector-effect: non-scaling-stroke;
+}
+
+.chart circle {
+  fill: #0f766e;
+  vector-effect: non-scaling-stroke;
+}
+
+.chart-labels {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-top: 8px;
+  color: #475569;
+}
+
+.history-table {
+  max-height: 260px;
+}
+
+@media (max-width: 720px) {
+  .header-band {
+    display: grid;
+  }
+
+  .header-summary {
+    text-align: left;
+  }
+}

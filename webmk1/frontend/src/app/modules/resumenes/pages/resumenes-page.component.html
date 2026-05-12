@@ -1,0 +1,174 @@
+<main class="layout">
+  <section class="header-band">
+    <div>
+      <span class="eyebrow">OPERACION</span>
+      <h1>Resumenes de lotes</h1>
+      <p>Maestro de lotes, consumo, mermas y fraccionamientos asociados.</p>
+    </div>
+    <div class="header-summary">
+      <strong>{{ lotes().length }} lotes</strong>
+      <span>{{ fmtKg(totalDisponible()) }} kg disponibles</span>
+    </div>
+  </section>
+
+  <p class="error" *ngIf="error()">{{ error() }}</p>
+  <p class="success" *ngIf="message()">{{ message() }}</p>
+
+  <section class="filters-panel">
+    <label>
+      Producto
+      <select [(ngModel)]="productId" (change)="loadLotes()">
+        <option [ngValue]="null">Todos</option>
+        <option *ngFor="let p of options().productos" [ngValue]="p.id">{{ p.name }}</option>
+      </select>
+    </label>
+    <label class="check-field">
+      <input type="checkbox" [(ngModel)]="soloAbiertos" (change)="loadLotes()">
+      Solo abiertos
+    </label>
+    <button type="button" class="primary-action" (click)="loadLotes()" [disabled]="loading()">
+      {{ loading() ? 'Cargando...' : 'Refrescar' }}
+    </button>
+  </section>
+
+  <section class="split">
+    <article class="panel">
+      <header>
+        Lotes
+        <span>{{ lotes().length }} lineas</span>
+      </header>
+      <div class="table-wrap lotes-table">
+        <table>
+          <thead>
+            <tr>
+              <th>Lote</th>
+              <th>Producto</th>
+              <th class="num">Kg total</th>
+              <th class="num">Kg usados</th>
+              <th class="num">Kg disp.</th>
+              <th class="num">Costo/kg</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr
+              *ngFor="let row of lotes()"
+              (click)="selectLot(row)"
+              [class.selected]="selectedLotId === row.id"
+              [class.negative]="row.kg_disponible < 0"
+            >
+              <td>
+                <strong>{{ row.lote }}</strong>
+                <small *ngIf="row.cerrado">Cerrado</small>
+              </td>
+              <td><span class="product-pill" [ngClass]="productPillClass(row.producto)">{{ row.producto }}</span></td>
+              <td class="num">{{ fmtKg(row.kg_total) }}</td>
+              <td class="num">{{ fmtKg(row.kg_usado) }}</td>
+              <td class="num">{{ fmtKg(row.kg_disponible) }}</td>
+              <td class="num">{{ fmtGs(row.costo_kg_gs) }}</td>
+            </tr>
+            <tr *ngIf="!loading() && lotes().length === 0">
+              <td colspan="6">Sin lotes para el filtro actual.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </article>
+
+    <article class="panel detail-panel" *ngIf="selected() as detail; else emptyDetail">
+      <header>
+        <span>Lote {{ detail.lote }} - {{ detail.producto }} <small *ngIf="detail.cerrado">(cerrado)</small></span>
+        <button type="button" (click)="toggleCerrado()" [disabled]="saving()">
+          {{ detail.cerrado ? 'Abrir lote' : 'Cerrar lote' }}
+        </button>
+      </header>
+
+      <div class="detail-grid">
+        <div><span>Fecha compra</span><strong>{{ detail.fecha || '-' }}</strong></div>
+        <div><span>Proveedor</span><strong>{{ detail.proveedor || '-' }}</strong></div>
+        <div><span>Nro factura</span><strong>{{ detail.factura || '-' }}</strong></div>
+        <div><span>Monto compra</span><strong>{{ fmtGs(detail.costo_total_gs) }} Gs</strong></div>
+        <div><span>Venta estimada</span><strong>{{ fmtGs(detail.venta_estimada_gs) }} Gs</strong></div>
+        <div><span>Beneficio estimado</span><strong>{{ fmtGs(detail.beneficio_estimado_gs) }} Gs</strong></div>
+        <div><span>Costo por kg</span><strong>{{ fmtGs(detail.costo_kg_gs) }} Gs/kg</strong></div>
+        <div><span>Venta por kg</span><strong>{{ fmtGs(detail.venta_kg_gs) }} Gs/kg</strong></div>
+        <div><span>Recargo por kg</span><strong>{{ fmtGs(detail.recargo_kg_gs) }} Gs/kg</strong></div>
+        <div><span>Recargo %</span><strong>{{ detail.recargo_pct === null ? '-' : (detail.recargo_pct | number:'1.1-1') + '%' }}</strong></div>
+        <div><span>Kg totales</span><strong>{{ fmtKg(detail.kg_total) }}</strong></div>
+        <div><span>Bolsas eq</span><strong>{{ detail.bolsas_total === null ? '-' : fmtKg(detail.bolsas_total) }}</strong></div>
+        <div><span>Kg usados</span><strong>{{ fmtKg(detail.kg_usado) }} / {{ detail.bolsas_usadas === null ? '-' : fmtKg(detail.bolsas_usadas) }} bolsas</strong></div>
+        <div><span>Kg disponibles</span><strong>{{ fmtKg(detail.kg_disponible) }} / {{ detail.bolsas_disponibles === null ? '-' : fmtKg(detail.bolsas_disponibles) }} bolsas</strong></div>
+        <div><span>Merma total</span><strong class="danger">{{ fmtKg(detail.merma_kg) }}</strong></div>
+        <div><span>Beneficio %</span><strong>{{ detail.beneficio_pct === null ? '-' : (detail.beneficio_pct | number:'1.1-1') + '%' }}</strong></div>
+      </div>
+
+      <div class="usage">
+        <span>Consumo del lote</span>
+        <div class="usage-bar">
+          <i class="used" [style.width.%]="consumoWidth(detail)"></i>
+          <i class="merma" [style.width.%]="mermaWidth(detail)"></i>
+        </div>
+        <small>
+          Consumo: {{ detail.consumo_pct + detail.merma_pct | number:'1.0-0' }}%
+          ({{ fmtKg(detail.kg_usado) }} kg + {{ fmtKg(detail.merma_kg) }} kg merma = {{ fmtKg(detail.kg_usado + detail.merma_kg) }} / {{ fmtKg(detail.kg_total) }} kg)
+        </small>
+      </div>
+
+      <section class="markup-box" *ngIf="detail.recargos.length">
+        <h2>Recargo por presentacion</h2>
+        <div class="markup-grid">
+          <div *ngFor="let row of detail.recargos">
+            <strong>{{ row.gramaje }} g</strong>
+            <span>{{ fmtGs(row.venta_kg_gs) }} Gs/kg venta</span>
+            <small>
+              Recargo {{ fmtGs(row.recargo_kg_gs) }} Gs/kg
+              · {{ row.recargo_pct === null ? '-' : (row.recargo_pct | number:'1.1-1') + '%' }}
+            </small>
+          </div>
+        </div>
+      </section>
+
+      <section class="history">
+        <h2>Fraccionamientos de este lote</h2>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Fecha</th>
+                <th class="num">Gramaje</th>
+                <th class="num">Paquetes</th>
+                <th class="num">Kg</th>
+                <th class="num">Bolsas eq</th>
+                <th class="num">Costo kg</th>
+                <th class="num">Costo total</th>
+                <th class="num">Precio venta</th>
+                <th class="num">Beneficio</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr *ngFor="let row of detail.fraccionamientos">
+                <td>{{ row.fecha }}</td>
+                <td class="num">{{ row.gramaje }}</td>
+                <td class="num">{{ row.paquetes }}</td>
+                <td class="num">{{ fmtKg(row.kg_consumidos) }}</td>
+                <td class="num">{{ row.bolsas_eq === null ? '-' : fmtKg(row.bolsas_eq) }}</td>
+                <td class="num">{{ fmtGs(row.costo_kg_gs) }}</td>
+                <td class="num">{{ fmtGs(row.costo_total_gs) }}</td>
+                <td class="num">{{ fmtGs(row.precio_venta_gs) }}</td>
+                <td class="num">{{ fmtGs(row.beneficio_gs) }}</td>
+              </tr>
+              <tr *ngIf="detail.fraccionamientos.length === 0">
+                <td colspan="9">Sin fraccionamientos asociados.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </article>
+
+    <ng-template #emptyDetail>
+      <article class="panel empty">
+        <strong>{{ detailLoading() ? 'Cargando detalle...' : 'Selecciona un lote' }}</strong>
+      </article>
+    </ng-template>
+  </section>
+</main>

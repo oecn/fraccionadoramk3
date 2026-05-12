@@ -1,0 +1,320 @@
+<main class="layout">
+  <section class="hero-panel">
+    <div>
+      <span class="eyebrow">GRANOS CENTRAL</span>
+      <h1>Historial de Ventas</h1>
+      <p>Facturas de venta registradas en el sistema.</p>
+      <div class="hero-badges" *ngIf="data() as d">
+        <span>{{ filters.from_date }} / {{ filters.to_date }}</span>
+        <span>{{ d.total_registros }} registros</span>
+        <span>Total: {{ fmtGs(d.total_gs) }} Gs</span>
+        <span *ngIf="filters.retencion_mode">Con retención: {{ fmtGs(d.total_con_retencion) }} Gs</span>
+      </div>
+    </div>
+  </section>
+
+
+  <p class="error" *ngIf="error()">{{ error() }}</p>
+
+  <ng-container *ngIf="data() as d">
+    <section class="kpis">
+      <article class="kpi">
+        <span>Total registros</span>
+        <strong>{{ d.total_registros }}</strong>
+        <small>En el período seleccionado</small>
+      </article>
+      <article class="kpi">
+        <span>Total ventas</span>
+        <strong>{{ fmtGs(d.total_gs) }}</strong>
+        <small>Guaraníes</small>
+      </article>
+      <article class="kpi">
+        <span>Total c/ retención</span>
+        <strong>{{ fmtGs(d.total_con_retencion) }}</strong>
+        <small>Descontando 30% IVA</small>
+      </article>
+    </section>
+
+    <section class="filters-panel">
+      <div class="filters-heading">
+        <h2>Filtros</h2>
+      </div>
+      <section class="filters">
+        <label>
+          Desde
+          <input type="date" [(ngModel)]="filters.from_date" (change)="refresh()">
+        </label>
+        <label>
+          Hasta
+          <input type="date" [(ngModel)]="filters.to_date" (change)="refresh()">
+        </label>
+        <label>
+          Buscar factura / cliente
+          <input type="search" [(ngModel)]="filters.search" (keyup.enter)="refresh()">
+        </label>
+        <label class="toggle-label">
+          Vista retención
+          <input type="checkbox" [(ngModel)]="filters.retencion_mode" (change)="refresh()">
+        </label>
+        <button type="button" class="primary-action" (click)="refresh()" [disabled]="loading()">
+          {{ loading() ? 'Cargando...' : 'Actualizar' }}
+        </button>
+      </section>
+    </section>
+
+    <article class="panel">
+      <header>Facturas de venta — {{ d.total_registros }} registros</header>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Fecha</th>
+              <th>N° Factura</th>
+              <th>Cliente</th>
+              <th class="num">Grav. 5%</th>
+              <th class="num">IVA 5%</th>
+              <th class="num">Grav. 10%</th>
+              <th class="num">IVA 10%</th>
+              <th class="num">Total</th>
+              <th class="num">Total c/ret.</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let row of d.rows">
+              <td>{{ row.id }}</td>
+              <td>{{ row.ts || '-' }}</td>
+              <td>{{ row.invoice_no || '-' }}</td>
+              <td>{{ row.customer || '-' }}</td>
+              <td class="num">{{ fmtGs(row.gravada5_gs) }}</td>
+              <td class="num">{{ fmtGs(row.iva5_gs) }}</td>
+              <td class="num">{{ fmtGs(row.gravada10_gs) }}</td>
+              <td class="num">{{ fmtGs(row.iva10_gs) }}</td>
+              <td class="num">{{ fmtGs(row.total_gs) }}</td>
+              <td class="num">{{ fmtGs(row.total_con_retencion) }}</td>
+            </tr>
+            <tr *ngIf="d.rows.length === 0">
+              <td colspan="10" style="text-align:center; color:#66758d;">Sin resultados</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </article>
+  </ng-container>
+
+  <!-- ── DETALLE DE VENTAS ──────────────────────────────────────── -->
+  <section class="reporte-section">
+    <div class="reporte-header">
+      <h2>Detalle de Ventas</h2>
+      <span>Resumen por producto, gramaje y sucursal</span>
+    </div>
+
+    <section class="detalle-filters">
+      <label>
+        Vista
+        <select [(ngModel)]="detalleFilters.periodo">
+          <option value="mes">Por mes</option>
+          <option value="semana">Por semana</option>
+        </select>
+      </label>
+      <label>
+        Mes
+        <select [(ngModel)]="detalleFilters.ym">
+          <option value="">Todos</option>
+          <option *ngFor="let m of meses()" [value]="m">{{ m }}</option>
+        </select>
+      </label>
+      <label>
+        Producto
+        <select [(ngModel)]="detalleFilters.product_id">
+          <option [ngValue]="null">Todos</option>
+          <option *ngFor="let p of productos()" [ngValue]="p.id">{{ p.name }}</option>
+        </select>
+      </label>
+      <label>
+        Desde
+        <input type="date" [(ngModel)]="detalleFilters.desde">
+      </label>
+      <label>
+        Hasta
+        <input type="date" [(ngModel)]="detalleFilters.hasta">
+      </label>
+      <button type="button" class="primary-action" (click)="cargarDetalle()" [disabled]="detalleLoading()">
+        {{ detalleLoading() ? 'Cargando...' : 'Consultar' }}
+      </button>
+    </section>
+
+    <p class="error" *ngIf="detalleError()">{{ detalleError() }}</p>
+
+    <ng-container *ngIf="detalle() as det">
+      <section class="kpis kpis-2">
+        <article class="kpi">
+          <span>Total paquetes</span>
+          <strong>{{ fmtGs(det.total_paquetes) }}</strong>
+          <small>Unidades vendidas</small>
+        </article>
+        <article class="kpi">
+          <span>Total importe</span>
+          <strong>{{ fmtGs(det.total_importe_gs) }}</strong>
+          <small>Guaraníes</small>
+        </article>
+      </section>
+
+      <section class="detalle-grid">
+        <article class="panel">
+          <header>Ventas por producto / gramaje — {{ det.rows.length }} líneas</header>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Período</th>
+                  <th>Producto</th>
+                  <th class="num">Gramaje</th>
+                  <th class="num">Paquetes</th>
+                  <th class="num">Importe Gs</th>
+                  <th class="num">Base Gs</th>
+                  <th class="num">IVA Gs</th>
+                  <th class="num">Luque</th>
+                  <th class="num">Aregua</th>
+                  <th class="num">Itaugua</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr *ngFor="let row of det.rows">
+                  <td>{{ row.periodo }}</td>
+                  <td>{{ row.producto }}</td>
+                  <td class="num">{{ row.gramaje }} g</td>
+                  <td class="num">{{ fmtGs(row.paquetes) }}</td>
+                  <td class="num">{{ fmtGs(row.importe_gs) }}</td>
+                  <td class="num">{{ fmtGs(row.base_gs) }}</td>
+                  <td class="num">{{ fmtGs(row.iva_gs) }}</td>
+                  <td class="num">{{ fmtGs(row.paq_luque) }}</td>
+                  <td class="num">{{ fmtGs(row.paq_aregua) }}</td>
+                  <td class="num">{{ fmtGs(row.paq_itaugua) }}</td>
+                </tr>
+                <tr *ngIf="det.rows.length === 0">
+                  <td colspan="10" style="text-align:center;color:#66758d;">Sin resultados</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </article>
+
+        <article class="panel" *ngIf="det.sucursales.length > 0">
+          <header>Por sucursal</header>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Sucursal</th>
+                  <th class="num">Paquetes</th>
+                  <th class="num">Importe Gs</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr *ngFor="let row of det.sucursales">
+                  <td>{{ row.sucursal }}</td>
+                  <td class="num">{{ fmtGs(row.paquetes) }}</td>
+                  <td class="num">{{ fmtGs(row.importe_gs) }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </article>
+      </section>
+    </ng-container>
+  </section>
+
+  <!-- ── REPORTE MENSUAL ─────────────────────────────────────────── -->
+  <section class="reporte-section">
+    <div class="reporte-header">
+      <h2>Reporte Mensual</h2>
+      <span>Genera el resumen contable y operativo del mes</span>
+    </div>
+
+    <section class="reporte-filters">
+      <label>
+        Mes (YYYY-MM)
+        <input type="month" [(ngModel)]="reporteFiltros.ym">
+      </label>
+      <label>
+        Empresa
+        <input type="text" [(ngModel)]="reporteFiltros.empresa">
+      </label>
+      <button type="button" class="primary-action" (click)="generarReporte()" [disabled]="reporteLoading()">
+        {{ reporteLoading() ? 'Generando...' : 'Generar reporte' }}
+      </button>
+    </section>
+
+    <p class="error" *ngIf="reporteError()">{{ reporteError() }}</p>
+
+    <ng-container *ngIf="reporte() as r">
+      <section class="reporte-kpis">
+        <article class="kpi">
+          <span>Ventas totales</span>
+          <strong>{{ fmtGs(r.ventas_total) }}</strong>
+          <small>Facturas + bolsas</small>
+        </article>
+        <article class="kpi">
+          <span>Compras MP</span>
+          <strong>{{ fmtGs(r.compras_total) }}</strong>
+          <small>Materia prima</small>
+        </article>
+        <article class="kpi">
+          <span>Gastos</span>
+          <strong>{{ fmtGs(r.gastos_total) }}</strong>
+          <small>Del período</small>
+        </article>
+        <article class="kpi kpi-margen">
+          <span>Margen bruto</span>
+          <strong>{{ fmtGs(r.margen_bruto) }}</strong>
+          <small>{{ fmtPct(r.margen_bruto_pct) }} sobre ventas</small>
+        </article>
+        <article class="kpi kpi-beneficio">
+          <span>Beneficio operativo</span>
+          <strong>{{ fmtGs(r.beneficio_operativo) }}</strong>
+          <small>{{ fmtPct(r.beneficio_pct) }} sobre ventas</small>
+        </article>
+      </section>
+
+      <section class="reporte-grid" *ngIf="r.top_productos.length > 0">
+        <article class="panel">
+          <header>Top productos del mes</header>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>Producto</th>
+                  <th class="num">Gramaje</th>
+                  <th class="num">Paquetes</th>
+                  <th class="num">Total Gs</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr *ngFor="let row of r.top_productos; let i = index">
+                  <td>{{ i + 1 }}</td>
+                  <td>{{ row.producto }}</td>
+                  <td class="num">{{ row.gramaje }} g</td>
+                  <td class="num">{{ row.paquetes }}</td>
+                  <td class="num">{{ fmtGs(row.total_gs) }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </article>
+      </section>
+
+      <article class="panel reporte-preview">
+        <header>
+          Vista previa TXT — {{ r.ym }}
+          <div class="reporte-actions">
+            <button type="button" (click)="copiarReporte()">Copiar</button>
+            <button type="button" (click)="descargarReporte()">Descargar TXT</button>
+          </div>
+        </header>
+        <pre class="reporte-txt">{{ r.reporte_txt }}</pre>
+      </article>
+    </ng-container>
+  </section>
+</main>

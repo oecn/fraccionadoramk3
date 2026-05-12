@@ -1,0 +1,153 @@
+.work-grid {
+  grid-template-columns: minmax(0, 1.4fr) minmax(280px, 0.6fr);
+}
+
+.stock-grid {
+  grid-template-columns: minmax(340px, 0.65fr) minmax(0, 1.35fr);
+}
+
+.form-panel {
+  padding-bottom: 16px;
+}
+
+.form-grid {
+  grid-template-columns: repeat(4, minmax(150px, 1fr));
+}
+
+.filter-box {
+  display: grid;
+  gap: 12px;
+  padding: 15px;
+}
+
+.factura-upload {
+  display: grid;
+  grid-template-columns: minmax(280px, 1fr) auto;
+  gap: 12px;
+  padding: 15px;
+}
+
+.file-picker {
+  display: block;
+}
+
+.file-picker input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+}
+
+.file-picker span {
+  display: flex;
+  align-items: center;
+  min-height: 38px;
+  padding: 8px 11px;
+  border: 1px solid #cbd7e3;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #12314a;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.factura-meta {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 10px;
+  padding: 0 15px 15px;
+}
+
+.factura-meta div {
+  display: grid;
+  gap: 5px;
+  padding: 10px;
+  border: 1px solid #d8e2ee;
+  border-radius: 8px;
+  background: #f8fbfd;
+}
+
+.factura-meta span {
+  color: #66758d;
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.factura-meta strong {
+  min-width: 0;
+  overflow: hidden;
+  color: #12314a;
+  font-size: 15px;
+  text-overflow: ellipsis;
+}
+
+tbody tr.importable td {
+  background: #f0fdf4;
+}
+
+tbody tr.not-importable td {
+  background: #fff1f2;
+  color: #7f1d1d;
+}
+
+.check-filter {
+  display: inline-flex;
+  grid-template: none;
+  align-items: center;
+  gap: 7px;
+  min-height: 38px;
+  align-self: end;
+}
+
+.check-filter input {
+  width: 16px;
+  height: 16px;
+  min-width: 16px;
+  padding: 0;
+}
+
+.primary-action {
+  margin-left: 15px;
+}
+
+.primary-action.inline {
+  margin-left: 0;
+}
+
+.preview {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin: 0 15px 14px;
+}
+
+.preview div {
+  display: grid;
+  gap: 6px;
+  padding: 12px;
+  border: 1px solid #d8e2ee;
+  border-radius: 8px;
+  background: #f8fbfd;
+}
+
+.preview span {
+  color: #66758d;
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.preview strong {
+  color: #12314a;
+  font-size: 18px;
+}
+
+@media (max-width: 900px) {
+  .work-grid,
+  .stock-grid,
+  .form-grid,
+  .factura-upload,
+  .factura-meta,
+  .preview {
+    grid-template-columns: 1fr;
+  }
+}

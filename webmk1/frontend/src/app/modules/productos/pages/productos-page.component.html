@@ -1,0 +1,118 @@
+<main class="layout">
+  <section class="header-band">
+    <div>
+      <span class="eyebrow">OPERACION</span>
+      <h1>Productos</h1>
+      <p>Precios de venta e IVA por gramaje.</p>
+    </div>
+    <div class="header-summary">
+      <strong>{{ rows().length }} presentaciones</strong>
+      <span>{{ fmtGs(totalValorStock()) }} Gs en stock</span>
+    </div>
+  </section>
+
+  <p class="error" *ngIf="error()">{{ error() }}</p>
+  <p class="success" *ngIf="message()">{{ message() }}</p>
+
+  <section class="panel">
+    <header>
+      Precios de venta
+      <button type="button" (click)="load()" [disabled]="loading()">
+        {{ loading() ? 'Cargando...' : 'Refrescar' }}
+      </button>
+    </header>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Producto</th>
+            <th class="num">Gramaje</th>
+            <th class="num">Stock paquetes</th>
+            <th class="num">Precio venta</th>
+            <th class="num">IVA</th>
+            <th class="num">Valor stock</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let row of rows()">
+            <td><span class="product-pill" [ngClass]="productPillClass(row.producto)">{{ row.producto }}</span></td>
+            <td class="num">{{ row.gramaje }} g</td>
+            <td class="num">{{ row.paquetes_stock }}</td>
+            <td class="num">
+              <input type="number" min="0" step="1" [(ngModel)]="row.price_gs">
+            </td>
+            <td class="num">
+              <select [(ngModel)]="row.iva">
+                <option [ngValue]="5">5%</option>
+                <option [ngValue]="10">10%</option>
+              </select>
+            </td>
+            <td class="num">{{ fmtGs(row.price_gs * row.paquetes_stock) }}</td>
+            <td class="num">
+              <button type="button" class="primary-action" (click)="save(row)" [disabled]="savingKey() === rowKey(row)">
+                {{ savingKey() === rowKey(row) ? 'Guardando...' : 'Guardar' }}
+              </button>
+              <button type="button" (click)="openHistory(row)">Historico</button>
+            </td>
+          </tr>
+          <tr *ngIf="!loading() && rows().length === 0">
+            <td colspan="7">Sin productos cargados.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="modal-backdrop" *ngIf="history() as h" (click)="closeHistory()">
+    <article class="history-modal" (click)="$event.stopPropagation()">
+      <header>
+        <div>
+          <strong>{{ h.producto }} {{ h.gramaje }} g</strong>
+          <span>Historico de precio de venta</span>
+        </div>
+        <button type="button" (click)="closeHistory()">Cerrar</button>
+      </header>
+
+      <p *ngIf="historyLoading()">Cargando historico...</p>
+      <ng-container *ngIf="!historyLoading()">
+        <div class="chart" *ngIf="h.rows.length; else emptyHistory">
+          <svg viewBox="0 0 100 100" preserveAspectRatio="none">
+            <line x1="0" y1="90" x2="100" y2="90"></line>
+            <line x1="0" y1="10" x2="0" y2="90"></line>
+            <polyline [attr.points]="chartPoints(h)"></polyline>
+            <circle *ngFor="let dot of chartDots(h)" [attr.cx]="dot.x" [attr.cy]="dot.y" r="1.8"></circle>
+          </svg>
+          <div class="chart-labels">
+            <span>{{ firstDate(h) }}</span>
+            <strong>{{ fmtGs(h.rows[h.rows.length - 1].price_gs) }} Gs</strong>
+            <span>{{ lastDate(h) }}</span>
+          </div>
+        </div>
+
+        <ng-template #emptyHistory>
+          <p>Sin datos historicos para este gramaje.</p>
+        </ng-template>
+
+        <div class="table-wrap history-table" *ngIf="h.rows.length">
+          <table>
+            <thead>
+              <tr>
+                <th>Fecha</th>
+                <th class="num">Precio</th>
+                <th class="num">IVA</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr *ngFor="let row of h.rows">
+                <td>{{ row.fecha }}</td>
+                <td class="num">{{ fmtGs(row.price_gs) }} Gs</td>
+                <td class="num">{{ row.iva }}%</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </ng-container>
+    </article>
+  </section>
+</main>

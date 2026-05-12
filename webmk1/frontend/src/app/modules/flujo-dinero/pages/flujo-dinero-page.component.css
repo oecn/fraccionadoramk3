@@ -1,0 +1,159 @@
+@import '../../dashboard/pages/dashboard-page.component.css';
+
+.money-kpis {
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+}
+
+.money-kpis .kpi {
+  min-height: 116px;
+}
+
+.money-kpis .kpi strong {
+  font-size: 25px;
+}
+
+.filters {
+  grid-template-columns: 110px 170px 160px 160px minmax(210px, 1fr) 220px;
+}
+
+.finance-stack {
+  display: grid;
+  gap: 14px;
+}
+
+.chart-panel {
+  display: grid;
+}
+
+.chart-wrap {
+  min-width: 0;
+  padding: 14px 18px 0;
+  overflow-x: auto;
+}
+
+.money-chart {
+  display: block;
+  width: 100%;
+  min-width: 1180px;
+  height: auto;
+}
+
+.axis {
+  stroke: #8aa1b5;
+  stroke-width: 1.2;
+}
+
+.grid-line {
+  stroke: #e7edf5;
+  stroke-width: 1;
+}
+
+.chart-bar {
+  opacity: 0.9;
+}
+
+.chart-bar.ventas,
+.dot.ventas {
+  background: var(--gc-blue);
+  fill: var(--gc-blue);
+}
+
+.chart-bar.compras,
+.dot.compras {
+  background: #d24b4b;
+  fill: #d24b4b;
+}
+
+.chart-bar.gastos,
+.dot.gastos {
+  background: var(--gc-yellow);
+  fill: var(--gc-yellow);
+}
+
+.chart-bar.notas,
+.dot.notas {
+  background: #8b5cf6;
+  fill: #8b5cf6;
+}
+
+.bar-label {
+  fill: #234254;
+  font-size: 10px;
+  font-weight: 900;
+}
+
+.month-label {
+  fill: #53677f;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.trend-line {
+  fill: none;
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.trend-line.flujo {
+  stroke: #0f7778;
+  fill: none;
+  opacity: 0.82;
+}
+
+.trend-dot.flujo {
+  stroke: #0f7778;
+  fill: #0f7778;
+}
+
+.trend-line.acumulado {
+  stroke: #061326;
+  fill: none;
+  opacity: 0.72;
+}
+
+.trend-dot.acumulado {
+  stroke: #061326;
+  fill: #061326;
+}
+
+.trend-line.acumulado {
+  stroke-dasharray: 10 7;
+  opacity: 0.78;
+}
+
+.dot.flujo {
+  background: #0f7778;
+}
+
+.dot.acumulado {
+  background: #061326;
+}
+
+.chart-panel footer {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 0 16px 16px;
+  color: #53677f;
+  font-weight: 800;
+}
+
+.chart-panel footer span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+}
+
+@media (max-width: 1100px) {
+  .money-kpis,
+  .filters {
+    grid-template-columns: 1fr;
+  }
+}

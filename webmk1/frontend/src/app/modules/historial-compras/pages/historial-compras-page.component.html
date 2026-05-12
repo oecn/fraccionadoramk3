@@ -1,0 +1,84 @@
+<main class="layout">
+  <section class="hero-panel">
+    <div>
+      <span class="eyebrow">GRANOS CENTRAL</span>
+      <h1>Historial de Compras</h1>
+      <p>Lotes de materia prima registrados en el sistema.</p>
+      <div class="hero-badges" *ngIf="data() as d">
+        <span>{{ filters.from_date }} / {{ filters.to_date }}</span>
+        <span>{{ d.total_registros }} registros</span>
+        <span>Total: {{ fmtGs(d.total_gs) }} Gs</span>
+      </div>
+    </div>
+  </section>
+
+
+  <p class="error" *ngIf="error()">{{ error() }}</p>
+
+  <ng-container *ngIf="data() as d">
+    <section class="kpis">
+      <article class="kpi">
+        <span>Total registros</span>
+        <strong>{{ d.total_registros }}</strong>
+        <small>En el período seleccionado</small>
+      </article>
+      <article class="kpi">
+        <span>Total compras</span>
+        <strong>{{ fmtGs(d.total_gs) }}</strong>
+        <small>Guaraníes</small>
+      </article>
+    </section>
+
+    <section class="filters-panel">
+      <div class="filters-heading">
+        <h2>Filtros</h2>
+      </div>
+      <section class="filters">
+        <label>
+          Desde
+          <input type="date" [(ngModel)]="filters.from_date" (change)="refresh()">
+        </label>
+        <label>
+          Hasta
+          <input type="date" [(ngModel)]="filters.to_date" (change)="refresh()">
+        </label>
+        <label>
+          Buscar factura / proveedor
+          <input type="search" [(ngModel)]="filters.search" (keyup.enter)="refresh()">
+        </label>
+        <button type="button" class="primary-action" (click)="refresh()" [disabled]="loading()">
+          {{ loading() ? 'Cargando...' : 'Actualizar' }}
+        </button>
+      </section>
+    </section>
+
+    <article class="panel">
+      <header>Lotes de compra — {{ d.total_registros }} registros</header>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Fecha</th>
+              <th>Factura</th>
+              <th>Proveedor</th>
+              <th class="num">Costo total (Gs)</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let row of d.rows">
+              <td>{{ row.id }}</td>
+              <td>{{ row.ts || '-' }}</td>
+              <td>{{ row.factura || '-' }}</td>
+              <td>{{ row.proveedor || '-' }}</td>
+              <td class="num">{{ fmtGs(row.costo_total_gs) }}</td>
+            </tr>
+            <tr *ngIf="d.rows.length === 0">
+              <td colspan="5" style="text-align:center; color:#66758d;">Sin resultados</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </article>
+  </ng-container>
+</main>

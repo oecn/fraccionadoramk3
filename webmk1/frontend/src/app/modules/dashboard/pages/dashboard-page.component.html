@@ -1,0 +1,333 @@
+<main class="layout">
+  <section class="hero-panel">
+    <div>
+      <span class="eyebrow">GRANOS CENTRAL</span>
+      <h1>Inicio Operativo</h1>
+      <p>Pedidos, pagos, cobros y tendencia operativa desde PostgreSQL.</p>
+      <div class="hero-badges" *ngIf="data() as d">
+        <span>{{ filters.from_date }} / {{ filters.to_date }}</span>
+        <span>{{ d.orders.length }} pedidos</span>
+        <span>{{ d.payments.length }} pagos</span>
+        <span>{{ d.collections.length }} facturas</span>
+      </div>
+    </div>
+  </section>
+
+
+  <p class="error" *ngIf="error()">{{ error() }}</p>
+  <p class="message" *ngIf="message()">{{ message() }}</p>
+
+  <ng-container *ngIf="data() as d">
+    <section class="kpis">
+      <article class="kpi" *ngFor="let kpi of d.kpis">
+        <span>{{ kpi.title }}</span>
+        <strong>{{ kpi.value }}</strong>
+        <small>{{ kpi.subtitle }}</small>
+      </article>
+    </section>
+
+    <section class="filters-panel">
+      <div class="filters-heading">
+        <h2>Filtros y resumen operativo</h2>
+        <span>{{ d.updated_at }}</span>
+      </div>
+      <section class="filters">
+        <label>
+          Sucursal
+          <select [(ngModel)]="filters.sucursal" (change)="refresh()">
+            <option value="">Todas</option>
+            <option *ngFor="let sucursal of sucursales()" [value]="sucursal">{{ sucursal }}</option>
+          </select>
+        </label>
+        <label>
+          Desde
+          <input type="date" [(ngModel)]="filters.from_date" (change)="refresh()">
+        </label>
+        <label>
+          Hasta
+          <input type="date" [(ngModel)]="filters.to_date" (change)="refresh()">
+        </label>
+        <label class="search">
+          Buscar pedido/factura
+          <input type="search" [(ngModel)]="filters.search" (keyup.enter)="refresh()">
+        </label>
+        <button type="button" class="primary-action" (click)="refresh()" [disabled]="loading()">
+          {{ loading() ? 'Cargando...' : 'Actualizar resumen' }}
+        </button>
+      </section>
+    </section>
+
+    <section class="grid two">
+      <article class="panel">
+        <header>Pedidos pendientes de entrega</header>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Pedido</th>
+                <th>Sucursal</th>
+                <th>Fecha pedido</th>
+                <th>Compromiso</th>
+                <th>Dias atraso</th>
+                <th>Estado</th>
+                <th>Prioridad</th>
+                <th>% listo</th>
+                <th>Monto</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr *ngFor="let row of d.orders">
+                <td>{{ row.numero || ('ID ' + row.oc_id) }}</td>
+                <td>{{ row.sucursal || '-' }}</td>
+                <td>{{ row.fecha_pedido || '-' }}</td>
+                <td>{{ row.fecha_compromiso || '-' }}</td>
+                <td><span class="pill" [ngClass]="urgencyClass(row.dias_atraso)">{{ row.dias_atraso ?? '-' }}</span></td>
+                <td>{{ row.estado }}</td>
+                <td>{{ row.prioridad }}</td>
+                <td><span class="pill" [ngClass]="readyClass(row.pct_listo_entrega)">{{ row.pct_listo_entrega | number:'1.1-1' }}%</span></td>
+                <td class="num">{{ fmtGs(row.monto_total) }}</td>
+                <td>
+                  <button type="button" class="small-action" (click)="markOrderDelivered(row.oc_id)" [disabled]="savingOrder() === row.oc_id">
+                    {{ savingOrder() === row.oc_id ? '...' : 'Entregado' }}
+                  </button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </article>
+
+      <article class="panel">
+        <header class="panel-header-split">
+          <span>Pagos pendientes de mercaderia</span>
+          <span>{{ selectedPaymentRows().length }} sel. / {{ fmtGs(selectedPaymentTotal()) }} Gs</span>
+        </header>
+        <div class="table-wrap payments-table">
+          <table>
+            <thead>
+              <tr>
+                <th></th>
+                <th>Proveedor</th>
+                <th>Factura</th>
+                <th>Emision</th>
+                <th>Vencimiento</th>
+                <th>Dias</th>
+                <th>Estado</th>
+                <th>Monto</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr *ngFor="let row of d.payments">
+                <td>
+                  <input
+                    type="checkbox"
+                    [ngModel]="selectedPayments()[row.factura_id]"
+                    (ngModelChange)="togglePayment(row, $event)"
+                  >
+                </td>
+                <td>{{ row.proveedor || '-' }}</td>
+                <td>{{ row.numero_doc || ('ID ' + row.factura_id) }}</td>
+                <td>{{ row.fecha_emision || '-' }}</td>
+                <td>{{ row.vencimiento || '-' }}</td>
+                <td><span class="pill" [ngClass]="dueClass(row.dias_para_vencer)">{{ row.dias_para_vencer ?? '-' }}</span></td>
+                <td>{{ row.estado }}</td>
+                <td class="num">{{ fmtGs(row.monto) }}</td>
+              </tr>
+              <tr *ngIf="d.payments.length === 0">
+                <td colspan="8" class="empty">Sin pagos pendientes.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <section class="payment-actions">
+          <button type="button" class="primary-action" (click)="openPaymentDialog()" [disabled]="selectedPaymentRows().length === 0">
+            Registrar pago
+          </button>
+          <button type="button" class="ghost-button" (click)="openReviewPayments()">
+            Revisar pagos
+          </button>
+        </section>
+      </article>
+    </section>
+
+    <section class="grid bottom">
+      <article class="panel collections">
+        <header>Facturas emitidas</header>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Fecha</th>
+                <th>N Factura</th>
+                <th>Cliente</th>
+                <th>Dias sin cobrar</th>
+                <th>Grav. 5%</th>
+                <th>IVA 5%</th>
+                <th>Grav. 10%</th>
+                <th>IVA 10%</th>
+                <th>Total</th>
+                <th>Total c/retencion</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr *ngFor="let row of d.collections">
+                <td>{{ row.invoice_id }}</td>
+                <td>{{ row.ts || '-' }}</td>
+                <td>{{ row.invoice_no || '-' }}</td>
+                <td>{{ row.customer || '-' }}</td>
+                <td><span class="pill" [ngClass]="dueClass(row.dias_para_cobro)">{{ row.dias_sin_cobrar ?? '-' }}</span></td>
+                <td class="num">{{ fmtGs(row.gravada5_gs) }}</td>
+                <td class="num">{{ fmtGs(row.iva5_gs) }}</td>
+                <td class="num">{{ fmtGs(row.gravada10_gs) }}</td>
+                <td class="num">{{ fmtGs(row.iva10_gs) }}</td>
+                <td class="num">{{ fmtGs(row.total_gs) }}</td>
+                <td class="num">{{ fmtGs(row.total_con_retencion) }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </article>
+
+      <article class="panel trend">
+        <header>Tendencia</header>
+        <p>Pendientes ultimos 7 dias: <strong>{{ d.trend_7 }}</strong></p>
+        <p>Pendientes ultimos 30 dias: <strong>{{ d.trend_30 }}</strong></p>
+        <small>Compromiso estimado: fecha pedido + 2 dias / credito + 15 dias</small>
+        <footer>Actualizado: {{ d.updated_at }} | Fuente: {{ d.source }}</footer>
+      </article>
+    </section>
+  </ng-container>
+
+  <section class="modal-backdrop" *ngIf="paymentDialogOpen()">
+    <article class="modal">
+      <header>
+        <span>Registrar pago</span>
+        <button type="button" class="ghost-button" (click)="closePaymentDialog()">Cerrar</button>
+      </header>
+      <div class="payment-summary">
+        <strong>{{ selectedPaymentRows().length }} factura(s)</strong>
+        <span>Total: {{ fmtGs(selectedPaymentTotal()) }} Gs</span>
+      </div>
+      <div class="table-wrap mini">
+        <table>
+          <tbody>
+            <tr *ngFor="let row of selectedPaymentRows()">
+              <td>{{ row.proveedor || '-' }}</td>
+              <td>{{ row.numero_doc || ('ID ' + row.factura_id) }}</td>
+              <td class="num">{{ fmtGs(row.monto) }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <section class="payment-register">
+        <label>
+          Fecha pago
+          <input type="date" [(ngModel)]="paymentForm.fecha_pago">
+        </label>
+        <label>
+          Medio
+          <select [(ngModel)]="paymentForm.medio">
+            <option>Efectivo</option>
+            <option>Transferencia</option>
+            <option>Cheque</option>
+          </select>
+        </label>
+        <label *ngIf="paymentForm.medio === 'Cheque'">
+          Serie
+          <input type="text" [(ngModel)]="paymentForm.serie" (blur)="validateCheck()" (keyup.enter)="validateCheck()">
+        </label>
+        <label *ngIf="paymentForm.medio === 'Cheque'">
+          Nro cheque
+          <input type="text" [(ngModel)]="paymentForm.cheque_no" (blur)="validateCheck()" (keyup.enter)="validateCheck()">
+        </label>
+        <button *ngIf="paymentForm.medio === 'Cheque'" type="button" class="primary-action" (click)="validateCheck()">
+          Validar cheque
+        </button>
+        <p
+          *ngIf="paymentForm.medio === 'Cheque' && checkStatus() as status"
+          class="check-status"
+          [class.ok]="status.available"
+          [class.bad]="!status.available"
+        >
+          {{ status.message }} <span *ngIf="status.check">({{ status.check.label }})</span>
+        </p>
+        <label *ngIf="paymentForm.medio !== 'Cheque'">
+          Comprobante
+          <input type="text" [(ngModel)]="paymentForm.referencia">
+        </label>
+        <label *ngIf="paymentForm.medio === 'Efectivo'">
+          Nro recibo dinero
+          <input type="text" [(ngModel)]="paymentForm.nro_recibo_dinero">
+        </label>
+        <label class="wide">
+          Observacion
+          <input type="text" [(ngModel)]="paymentForm.observacion">
+        </label>
+      </section>
+      <footer>
+        <button type="button" class="ghost-button" (click)="closePaymentDialog()">Cancelar</button>
+        <button type="button" class="primary-action" (click)="registerPayment()" [disabled]="savingPayment()">
+          {{ savingPayment() ? 'Registrando...' : 'Confirmar pago' }}
+        </button>
+      </footer>
+    </article>
+  </section>
+
+  <section class="modal-backdrop" *ngIf="reviewPaymentsOpen()">
+    <article class="modal wide-modal">
+      <header>
+        <span>Revisar pagos</span>
+        <button type="button" class="ghost-button" (click)="closeReviewPayments()">Cerrar</button>
+      </header>
+      <section class="receipt-tools">
+        <label>
+          Nro recibo
+          <input type="text" [(ngModel)]="receiptForm.nro_recibo_dinero">
+        </label>
+        <button type="button" class="primary-action" (click)="applyReceiptToSelected()">
+          Aplicar a seleccionados
+        </button>
+        <span>{{ selectedPaymentDetailRows().length }} seleccionado(s)</span>
+      </section>
+      <div class="table-wrap review-table">
+        <table>
+          <thead>
+            <tr>
+              <th></th>
+              <th>Fecha pago</th>
+              <th>Proveedor</th>
+              <th>Factura</th>
+              <th class="num">Monto</th>
+              <th>Medio</th>
+              <th>Referencia</th>
+              <th>Recibo</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let row of paymentDetails()">
+              <td>
+                <input
+                  type="checkbox"
+                  [ngModel]="selectedPaymentDetails()[row.id]"
+                  (ngModelChange)="togglePaymentDetail(row, $event)"
+                >
+              </td>
+              <td>{{ row.fecha_pago || '-' }}</td>
+              <td>{{ row.proveedor || '-' }}</td>
+              <td>{{ row.factura || ('ID ' + row.lot_id) }}</td>
+              <td class="num">{{ fmtGs(row.monto_gs) }}</td>
+              <td>{{ row.medio || '-' }}</td>
+              <td>{{ row.referencia || '-' }}</td>
+              <td>{{ row.nro_recibo_dinero || '-' }}</td>
+            </tr>
+            <tr *ngIf="paymentDetails().length === 0">
+              <td colspan="8" class="empty">Sin pagos registrados.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </article>
+  </section>
+</main>

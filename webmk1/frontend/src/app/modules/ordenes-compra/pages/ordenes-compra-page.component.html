@@ -1,0 +1,229 @@
+<main class="layout">
+  <section class="header-band">
+    <div>
+      <span class="eyebrow">OPERACION</span>
+      <h1>Importar OC</h1>
+      <p>Parseo de ordenes de compra PDF y registro en pedidos pendientes.</p>
+    </div>
+    <div class="header-summary" *ngIf="result() as r">
+      <strong>OC {{ r.nro_oc }}</strong>
+      <span>{{ r.items.length }} items</span>
+    </div>
+  </section>
+
+  <p class="error" *ngIf="error()">{{ error() }}</p>
+  <p class="message" *ngIf="message()">{{ message() }}</p>
+
+  <section class="panel">
+    <header>PDF de orden de compra</header>
+    <div class="upload-row">
+      <label class="file-picker">
+        <input type="file" accept="application/pdf,.pdf" (change)="onFileChange($event)">
+        <span>{{ fileName || 'Seleccionar PDF' }}</span>
+      </label>
+      <button type="button" class="primary-action inline" (click)="importar()" [disabled]="importing()">
+        {{ importing() ? 'Importando...' : 'Parsear y guardar' }}
+      </button>
+    </div>
+  </section>
+
+  <section class="master-detail">
+    <aside class="panel master-panel">
+      <header>OC importadas</header>
+      <div class="oc-list">
+        <button
+          type="button"
+          class="oc-row"
+          *ngFor="let row of importadas()"
+          [class.active]="selected()?.oc_id === row.oc_id"
+          [ngClass]="'tone-' + ocTone(row)"
+          (click)="selectOc(row)"
+        >
+          <strong>{{ row.nro_oc || ('ID ' + row.oc_id) }}</strong>
+          <span>{{ row.sucursal || '-' }}</span>
+          <small>
+            {{ row.items_count }} items | {{ row.completada ? 'Entregada' : 'Pendiente' }}
+          </small>
+          <em *ngIf="!row.completada" [ngClass]="'pct-' + percentTone(row.pct_listo_envio)">
+            {{ row.pct_listo_envio | number:'1.0-1' }}%
+          </em>
+        </button>
+        <div class="empty list-empty" *ngIf="!loadingList() && importadas().length === 0">Sin OC importadas.</div>
+        <div class="empty list-empty" *ngIf="loadingList()">Cargando...</div>
+      </div>
+    </aside>
+
+    <section class="panel detail-panel">
+      <header>Contenido de la OC</header>
+      <ng-container *ngIf="selected() as detail; else noSelection">
+        <div class="detail-head">
+          <div>
+            <span>OC</span>
+            <strong>{{ detail.nro_oc }}</strong>
+          </div>
+          <div>
+            <span>Sucursal</span>
+            <strong>{{ detail.sucursal || '-' }}</strong>
+          </div>
+          <div>
+            <span>Fecha</span>
+            <strong>{{ detail.fecha_pedido || '-' }}</strong>
+          </div>
+          <div>
+            <span>Total</span>
+            <strong>{{ fmtGs(detail.monto_total) }}</strong>
+          </div>
+          <div>
+            <span>Estado</span>
+            <strong>{{ detail.completada ? 'Entregada' : 'Pendiente' }}</strong>
+          </div>
+          <div [ngClass]="'pct-' + percentTone(detail.pct_listo_envio)">
+            <span>Listo</span>
+            <strong>{{ detail.pct_listo_envio | number:'1.0-1' }}%</strong>
+          </div>
+          <button type="button" class="status-action" (click)="toggleEstado(detail)" [disabled]="savingStatus() === detail.oc_id">
+            {{ savingStatus() === detail.oc_id ? 'Guardando...' : (detail.completada ? 'Marcar pendiente' : 'Marcar entregada') }}
+          </button>
+          <button type="button" class="danger-action" (click)="eliminar(detail)" [disabled]="deleting() === detail.oc_id">
+            {{ deleting() === detail.oc_id ? 'Eliminando...' : 'Eliminar OC' }}
+          </button>
+        </div>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th class="num">Linea</th>
+                <th>Descripcion</th>
+                <th class="num">Cantidad</th>
+                <th class="num">En stock</th>
+                <th>Unidad</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr
+                *ngFor="let item of detail.items"
+                [class.stock-ok]="!detail.completada && item.stock_ok"
+                [class.stock-low]="!detail.completada && !item.stock_ok"
+              >
+                <td class="num">{{ item.linea }}</td>
+                <td>{{ item.descripcion }}</td>
+                <td class="num">{{ item.cantidad ?? '-' }}</td>
+                <td class="num">{{ stockLabel(item.stock_disponible) }}</td>
+                <td>{{ item.unidad || '-' }}</td>
+              </tr>
+              <tr *ngIf="detail.items.length === 0">
+                <td colspan="5" class="empty">Sin items.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </ng-container>
+      <ng-template #noSelection>
+        <div class="empty detail-empty">{{ loadingDetail() ? 'Cargando...' : 'Seleccione una OC.' }}</div>
+      </ng-template>
+    </section>
+  </section>
+
+  <section class="panel" *ngIf="result() as r">
+    <header>Ultima importacion</header>
+    <div class="meta-grid">
+      <div>
+        <span>OC</span>
+        <strong>{{ r.nro_oc }}</strong>
+      </div>
+      <div>
+        <span>Sucursal</span>
+        <strong>{{ r.sucursal || '-' }}</strong>
+      </div>
+      <div>
+        <span>Fecha</span>
+        <strong>{{ r.fecha_pedido || '-' }}</strong>
+      </div>
+      <div>
+        <span>Total</span>
+        <strong>{{ r.monto_total == null ? '-' : fmtGs(r.monto_total) }}</strong>
+      </div>
+    </div>
+  </section>
+
+  <section class="panel bag-panel">
+    <header>Bolsas necesarias</header>
+    <ng-container *ngIf="bolsas() as b; else loadingBags">
+      <div class="bag-grid">
+        <article class="bag-card" *ngFor="let row of b.rows" [class.ok]="row.stock_ok" [class.low]="!row.stock_ok">
+          <header>
+            <span>{{ row.producto }}</span>
+            <small>Bolsa {{ row.bolsa_kg | number:'1.0-0' }} kg</small>
+          </header>
+          <div class="bag-metric">
+            <span>Necesarias</span>
+            <strong>{{ row.necesarias }}</strong>
+          </div>
+          <footer>
+            <span>DISP {{ row.disponibles | number:'1.1-1' }}</span>
+            <b>{{ row.stock_ok ? 'OK' : 'FALTA' }}</b>
+          </footer>
+        </article>
+      </div>
+    </ng-container>
+    <ng-template #loadingBags>
+      <div class="empty detail-empty">{{ loadingBolsas() ? 'Cargando...' : 'Sin datos.' }}</div>
+    </ng-template>
+  </section>
+
+  <section class="panel">
+    <header>Pendientes acumulados</header>
+    <ng-container *ngIf="pendientes() as p; else loadingPending">
+      <div class="pending-summary">
+        <div>
+          <span>OC pendientes</span>
+          <strong>{{ p.total_ocs }}</strong>
+        </div>
+        <div>
+          <span>Total pendiente</span>
+          <strong>{{ fmtGs(p.total_monto) }}</strong>
+        </div>
+        <div>
+          <span>Con stock</span>
+          <strong>{{ p.items_ok }}/{{ p.total_items }}</strong>
+        </div>
+        <div>
+          <span>Con falta</span>
+          <strong>{{ p.items_falta }}</strong>
+        </div>
+        <div [ngClass]="'pct-' + percentTone(p.pct_listo_envio)">
+          <span>Listo para enviar</span>
+          <strong>{{ p.pct_listo_envio | number:'1.0-1' }}%</strong>
+        </div>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Descripcion</th>
+              <th>Producto</th>
+              <th class="num">Cantidad</th>
+              <th class="num">En stock</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let row of p.rows" [class.stock-ok]="row.stock_ok" [class.stock-low]="!row.stock_ok">
+              <td>{{ row.descripcion }}</td>
+              <td>{{ row.producto_match || '-' }}</td>
+              <td class="num">{{ row.necesario }}</td>
+              <td class="num">{{ stockLabel(row.stock_disponible) }}</td>
+            </tr>
+            <tr *ngIf="p.rows.length === 0">
+              <td colspan="4" class="empty">Sin pendientes acumulados.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </ng-container>
+    <ng-template #loadingPending>
+      <div class="empty detail-empty">{{ loadingPendientes() ? 'Cargando...' : 'Sin datos.' }}</div>
+    </ng-template>
+  </section>
+</main>

@@ -1,0 +1,193 @@
+<main class="layout">
+  <section class="hero-panel">
+    <div>
+      <span class="eyebrow">FLUJO DE DINERO</span>
+      <h1>Finanzas operativas</h1>
+      <p>Ventas, compras, gastos, notas de credito y flujo neto mensual.</p>
+      <div class="hero-badges" *ngIf="data() as d">
+        <span>{{ d.year }}</span>
+        <span>{{ d.quarter }}</span>
+        <span>{{ d.retencion_mode ? 'Con retencion' : 'Total' }}</span>
+        <span>Saldo inicial Gs. {{ fmtGs(d.saldo_inicial) }}</span>
+      </div>
+    </div>
+  </section>
+
+
+  <p class="error" *ngIf="error()">{{ error() }}</p>
+
+  <ng-container *ngIf="data() as d">
+    <section class="kpis money-kpis">
+      <article class="kpi" *ngFor="let kpi of d.kpis">
+        <span>{{ kpi.title }}</span>
+        <strong>{{ kpi.value }}</strong>
+        <small>{{ kpi.subtitle }}</small>
+      </article>
+    </section>
+
+    <section class="filters-panel">
+      <div class="filters-heading">
+        <h2>Filtros y resumen mensual</h2>
+        <span>{{ d.updated_at }}</span>
+      </div>
+      <section class="filters">
+        <label>
+          Año
+          <select [(ngModel)]="filters.year" (change)="refresh()">
+            <option *ngFor="let year of years()" [ngValue]="year">{{ year }}</option>
+          </select>
+        </label>
+        <label>
+          Trimestre
+          <select [(ngModel)]="filters.quarter" (change)="refresh()">
+            <option value="Todos">Todos</option>
+            <option value="T1">T1 Ene-Mar</option>
+            <option value="T2">T2 Abr-Jun</option>
+            <option value="T3">T3 Jul-Sep</option>
+            <option value="T4">T4 Oct-Dic</option>
+          </select>
+        </label>
+        <label>
+          Desde
+          <input type="date" [(ngModel)]="filters.from_date" (change)="refresh()">
+        </label>
+        <label>
+          Hasta
+          <input type="date" [(ngModel)]="filters.to_date" (change)="refresh()">
+        </label>
+        <label>
+          Vista ventas
+          <select [(ngModel)]="filters.retencion_mode" (change)="refresh()">
+            <option [ngValue]="false">Total</option>
+            <option [ngValue]="true">Con retencion IVA 30%</option>
+          </select>
+        </label>
+        <button type="button" class="primary-action" (click)="refresh()" [disabled]="loading()">
+          {{ loading() ? 'Cargando...' : 'Actualizar flujo' }}
+        </button>
+      </section>
+    </section>
+
+    <section class="finance-stack">
+      <article class="panel">
+        <header>Resumen mensual</header>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Mes</th>
+                <th>Compras</th>
+                <th>Ventas</th>
+                <th>Nota credito</th>
+                <th>Gastos</th>
+                <th>Flujo neto</th>
+                <th>Margen</th>
+                <th>Acumulado</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr *ngFor="let row of d.rows">
+                <td>{{ row.month }}</td>
+                <td class="num">{{ fmtGs(row.compras) }}</td>
+                <td class="num">{{ fmtGs(row.ventas) }}</td>
+                <td class="num">{{ fmtGs(row.notas_credito) }}</td>
+                <td class="num">{{ fmtGs(row.gastos) }}</td>
+                <td class="num"><span class="pill" [ngClass]="flujoClass(row.flujo)">{{ fmtGs(row.flujo) }}</span></td>
+                <td class="num">{{ row.margen | number:'1.1-1' }}%</td>
+                <td class="num">{{ fmtGs(row.acumulado) }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </article>
+
+      <article class="panel chart-panel">
+        <header>Grafico mensual</header>
+        <div class="chart-wrap">
+          <svg
+            class="money-chart"
+            [attr.viewBox]="'0 0 ' + chart.width + ' ' + chart.height"
+            role="img"
+            aria-label="Grafico mensual de flujo de dinero"
+          >
+            <line
+              class="axis"
+              [attr.x1]="chart.left"
+              [attr.x2]="chart.width - chart.right"
+              [attr.y1]="chartY(0, d.rows, 'main')"
+              [attr.y2]="chartY(0, d.rows, 'main')"
+            ></line>
+
+            <ng-container *ngFor="let row of d.rows; let i = index">
+              <line
+                class="grid-line"
+                [attr.x1]="chartX(i, d.rows.length)"
+                [attr.x2]="chartX(i, d.rows.length)"
+                [attr.y1]="chart.top"
+                [attr.y2]="chart.height - chart.bottom"
+              ></line>
+              <ng-container *ngFor="let bar of chartBars(row, i, d.rows)">
+                <rect
+                  class="chart-bar"
+                  [ngClass]="bar.className"
+                  [attr.x]="bar.x"
+                  [attr.y]="chartBarY(bar.value, d.rows)"
+                  [attr.width]="bar.width"
+                  [attr.height]="chartBarHeight(bar.value, d.rows)"
+                  rx="4"
+                ></rect>
+                <text
+                  *ngIf="showBarLabel(bar.value)"
+                  class="bar-label"
+                  [attr.x]="bar.x + bar.width / 2"
+                  [attr.y]="chartBarY(bar.value, d.rows) - 6"
+                  text-anchor="middle"
+                >{{ fmtM(bar.value) }}</text>
+              </ng-container>
+              <text
+                class="month-label"
+                [attr.x]="chartX(i, d.rows.length)"
+                [attr.y]="chart.height - 18"
+                text-anchor="middle"
+              >{{ row.month.slice(0, 3) }}</text>
+            </ng-container>
+
+            <polyline
+              class="trend-line flujo"
+              fill="none"
+              [attr.points]="linePoints(d.rows, 'flujo')"
+            ></polyline>
+            <polyline
+              class="trend-line acumulado"
+              fill="none"
+              [attr.points]="linePoints(d.rows, 'acumulado')"
+            ></polyline>
+
+            <ng-container *ngFor="let row of d.rows; let i = index">
+              <circle
+                class="trend-dot flujo"
+                r="4"
+                [attr.cx]="chartX(i, d.rows.length)"
+                [attr.cy]="chartY(row.flujo, d.rows, 'main')"
+              ></circle>
+              <circle
+                class="trend-dot acumulado"
+                r="4"
+                [attr.cx]="chartX(i, d.rows.length)"
+                [attr.cy]="chartY(row.acumulado, d.rows, 'acumulado')"
+              ></circle>
+            </ng-container>
+          </svg>
+        </div>
+        <footer>
+          <span><i class="dot ventas"></i>Ventas</span>
+          <span><i class="dot compras"></i>Compras</span>
+          <span><i class="dot gastos"></i>Gastos</span>
+          <span><i class="dot notas"></i>Notas credito</span>
+          <span><i class="dot flujo"></i>Flujo neto</span>
+          <span><i class="dot acumulado"></i>Acumulado</span>
+        </footer>
+      </article>
+    </section>
+  </ng-container>
+</main>

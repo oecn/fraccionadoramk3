@@ -1,0 +1,181 @@
+<main class="layout">
+  <section class="header-band">
+    <div>
+      <span class="eyebrow">TESORERIA</span>
+      <h1>Chequeras</h1>
+      <p>Bancos, chequeras recibidas y cheques marcados como usados en el sistema.</p>
+    </div>
+  </section>
+
+  <p class="error" *ngIf="error()">{{ error() }}</p>
+  <p class="message" *ngIf="message()">{{ message() }}</p>
+
+  <section class="work-grid">
+    <article class="panel">
+      <header>Registrar banco</header>
+      <div class="form-grid">
+        <label>
+          Banco
+          <input type="text" [(ngModel)]="bankForm.banco_nombre">
+        </label>
+        <label>
+          Nro. cuenta
+          <input type="text" [(ngModel)]="bankForm.nro_cuenta">
+        </label>
+        <label class="wide">
+          Resumen
+          <input type="text" [ngModel]="bankSummary()" readonly>
+        </label>
+      </div>
+      <button type="button" class="primary-action" (click)="saveBank()" [disabled]="saving()">Guardar banco</button>
+    </article>
+
+    <article class="panel">
+      <header>Registrar chequera</header>
+      <div class="form-grid checkbook-grid">
+        <label>
+          Banco
+          <select [(ngModel)]="checkbookForm.bank_id">
+            <option *ngFor="let bank of data()?.banks || []" [ngValue]="bank.bank_id">
+              {{ bank.banco_nombre }} | {{ bank.nro_cuenta }}
+            </option>
+          </select>
+        </label>
+        <label>
+          Formato
+          <select [(ngModel)]="checkbookForm.formato_chequera">
+            <option>Formulario</option>
+            <option>Talonario</option>
+          </select>
+        </label>
+        <label>
+          Tipo
+          <select [(ngModel)]="checkbookForm.tipo_cheque">
+            <option>Vista</option>
+            <option>Diferido</option>
+          </select>
+        </label>
+        <label>
+          Serie
+          <input type="text" [(ngModel)]="checkbookForm.serie">
+        </label>
+        <label>
+          Fecha recibido
+          <input type="date" [(ngModel)]="checkbookForm.fecha_recibimiento">
+        </label>
+        <label>
+          Desde
+          <input type="number" min="0" [(ngModel)]="checkbookForm.nro_inicio">
+        </label>
+        <label>
+          Hasta
+          <input type="number" min="0" [(ngModel)]="checkbookForm.nro_fin">
+        </label>
+        <label>
+          Recibido por
+          <input type="text" [(ngModel)]="checkbookForm.recibido_por">
+        </label>
+        <label class="wide">
+          Resumen
+          <input type="text" [ngModel]="checkbookSummary()" readonly>
+        </label>
+      </div>
+      <button type="button" class="primary-action" (click)="saveCheckbook()" [disabled]="saving()">Guardar chequera</button>
+    </article>
+  </section>
+
+  <ng-container *ngIf="data() as d">
+    <section class="stock-grid">
+      <article class="panel">
+        <header>Bancos</header>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Banco</th>
+                <th>Cuenta</th>
+                <th>Resumen</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr *ngFor="let bank of d.banks">
+                <td>{{ bank.banco_nombre }}</td>
+                <td>{{ bank.nro_cuenta }}</td>
+                <td>{{ bank.resumen || '-' }}</td>
+              </tr>
+              <tr *ngIf="d.banks.length === 0">
+                <td colspan="3" class="empty">Sin bancos cargados.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </article>
+
+      <article class="panel">
+        <header>Chequeras cargadas</header>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Banco</th>
+                <th>Cuenta</th>
+                <th>Formato</th>
+                <th>Tipo</th>
+                <th>Serie</th>
+                <th>Rango</th>
+                <th>Recibido por</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr *ngFor="let c of d.checkbooks">
+                <td>{{ c.banco_nombre }}</td>
+                <td>{{ c.nro_cuenta }}</td>
+                <td>{{ c.formato_chequera }}</td>
+                <td>{{ c.tipo_cheque }}</td>
+                <td>{{ c.serie || '-' }}</td>
+                <td>{{ fmtRange(c.nro_inicio, c.nro_fin) }}</td>
+                <td>{{ c.recibido_por }}</td>
+              </tr>
+              <tr *ngIf="d.checkbooks.length === 0">
+                <td colspan="7" class="empty">Sin chequeras cargadas.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </article>
+    </section>
+
+    <article class="panel">
+      <header>Cheques usados / cargados en movimientos</header>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Fecha uso</th>
+              <th>Banco</th>
+              <th>Cuenta</th>
+              <th>Serie</th>
+              <th>Cheque</th>
+              <th>Referencia</th>
+              <th>Origen</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let u of d.used_checks">
+              <td>{{ u.used_ts }}</td>
+              <td>{{ u.banco_nombre || '-' }}</td>
+              <td>{{ u.nro_cuenta || '-' }}</td>
+              <td>{{ u.serie || '-' }}</td>
+              <td>{{ u.cheque_no }}</td>
+              <td>{{ u.referencia || '-' }}</td>
+              <td>{{ u.payment_group_id || '-' }}</td>
+            </tr>
+            <tr *ngIf="d.used_checks.length === 0">
+              <td colspan="7" class="empty">Sin cheques usados registrados.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </article>
+  </ng-container>
+</main>

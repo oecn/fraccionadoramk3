@@ -58,3 +58,24 @@ desktop.ini
 *.env.local
 secrets.py
 config_local.py
+
+# Web apps / Angular
+webmk1/frontend/node_modules/
+webmk1/frontend/dist/
+webmk1/frontend/.angular/
+webmk1/frontend/.vite/
+webmk1/frontend/coverage/
+webmk1/frontend/npm-debug.log*
+webmk1/frontend/yarn-debug.log*
+webmk1/frontend/yarn-error.log*
+
+# Web backend
+webmk1/backend/.venv/
+webmk1/backend/venv/
+webmk1/backend/__pycache__/
+webmk1/backend/**/__pycache__/
+webmk1/backend/.pytest_cache/
+webmk1/backend/.mypy_cache/
+webmk1/backend/.ruff_cache/
+webmk1/backend/uploads/
+webmk1/backend/tmp/

@@ -1,0 +1,194 @@
+<main class="layout">
+  <section class="header-band">
+    <div>
+      <span class="eyebrow">OPERACION</span>
+      <h1>Ventas de paquetes</h1>
+      <p>Facturacion de productos fraccionados con descuento automatico de stock.</p>
+    </div>
+    <div class="header-summary">
+      <strong>{{ fmtGs(total()) }} Gs</strong>
+      <span>{{ invoiceItems().length }} items</span>
+    </div>
+  </section>
+
+  <p class="error" *ngIf="error()">{{ error() }}</p>
+  <p class="message" *ngIf="message()">{{ message() }}</p>
+
+  <section class="panel">
+    <header>Datos de factura</header>
+    <div class="form-grid invoice-grid">
+      <label>
+        Nro. factura
+        <input type="text" [(ngModel)]="invoice.invoice_no">
+      </label>
+      <label>
+        Cliente
+        <input type="text" [(ngModel)]="invoice.customer">
+      </label>
+      <label>
+        Fecha
+        <input type="date" [(ngModel)]="invoice.fecha">
+      </label>
+    </div>
+  </section>
+
+  <section class="work-grid">
+    <article class="panel stock-panel">
+      <header>Productos en stock para vender</header>
+      <div class="table-wrap compact">
+        <table>
+          <thead>
+            <tr>
+              <th>Producto</th>
+              <th class="num">g</th>
+              <th class="num">Stock</th>
+              <th class="num">Precio</th>
+              <th class="num">IVA</th>
+              <th class="num">Vender</th>
+              <th class="num">Importe</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let item of options().stock" [class.over-stock]="isOverStock(item)">
+              <td>
+                <span class="product-pill" [ngClass]="productPillClass(item.producto)">
+                  <span>{{ item.producto }}</span>
+                </span>
+              </td>
+              <td class="num">{{ item.gramaje }}</td>
+              <td class="num">{{ item.paquetes }}</td>
+              <td class="num" [class.warn]="item.price_gs == null">{{ item.price_gs == null ? '-' : fmtGs(item.price_gs) }}</td>
+              <td class="num">{{ item.iva || '-' }}</td>
+              <td class="num">
+                <input class="qty-input" type="number" min="0" [max]="item.paquetes" [(ngModel)]="sellQuantities[stockKey(item)]">
+              </td>
+              <td class="num">{{ fmtGs(pendingLineTotal(item)) }}</td>
+            </tr>
+            <tr *ngIf="options().stock.length === 0">
+              <td colspan="7" class="empty">Sin paquetes disponibles.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </article>
+  </section>
+
+  <article class="panel">
+    <header>Factura actual</header>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Producto</th>
+            <th class="num">g</th>
+            <th class="num">Cantidad</th>
+            <th class="num">Precio</th>
+            <th class="num">Total</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let item of invoiceItems()">
+            <td>
+              <span class="product-pill" [ngClass]="productPillClass(item.producto)">
+                <span>{{ item.producto }}</span>
+              </span>
+            </td>
+            <td class="num">{{ item.gramaje }}</td>
+            <td class="num">{{ item.cantidad }}</td>
+            <td class="num">{{ fmtGs(item.price_gs) }}</td>
+            <td class="num">{{ fmtGs(lineTotal(item)) }}</td>
+            <td></td>
+          </tr>
+          <tr *ngIf="invoiceItems().length === 0">
+            <td colspan="6" class="empty">Sin items agregados.</td>
+          </tr>
+        </tbody>
+        <tfoot>
+          <tr>
+            <td colspan="4" class="num">Total</td>
+            <td class="num total-cell">{{ fmtGs(total()) }}</td>
+            <td></td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+    <section class="tax-summary" *ngIf="taxSummary() as tax">
+      <div>
+        <span>Gravada 5%</span>
+        <strong>{{ fmtGs(tax.gravada5) }}</strong>
+      </div>
+      <div>
+        <span>IVA 5%</span>
+        <strong>{{ fmtGs(tax.iva5) }}</strong>
+      </div>
+      <div>
+        <span>Gravada 10%</span>
+        <strong>{{ fmtGs(tax.gravada10) }}</strong>
+      </div>
+      <div>
+        <span>IVA 10%</span>
+        <strong>{{ fmtGs(tax.iva10) }}</strong>
+      </div>
+      <div>
+        <span>Total IVA</span>
+        <strong>{{ fmtGs(totalIva()) }}</strong>
+      </div>
+      <div>
+        <span>Total</span>
+        <strong>{{ fmtGs(total()) }}</strong>
+      </div>
+    </section>
+    <section class="sheet-preview" *ngIf="sheetPreview() as sheet">
+      <label class="sheet-toggle">
+        <input type="checkbox" [(ngModel)]="invoice.send_to_sheet">
+        Enviar a Google Sheets al registrar
+      </label>
+      <div class="sheet-row" [class.disabled]="!invoice.send_to_sheet">
+        <div>
+          <span>Mes</span>
+          <strong>{{ sheet.mes || '-' }}</strong>
+        </div>
+        <div>
+          <span>Cliente</span>
+          <strong>{{ sheet.cliente }}</strong>
+        </div>
+        <div>
+          <span>Factura</span>
+          <strong>{{ sheet.factura || '-' }}</strong>
+        </div>
+        <div>
+          <span>Fecha</span>
+          <strong>{{ sheet.fecha || '-' }}</strong>
+        </div>
+        <div>
+          <span>Remision</span>
+          <strong>{{ sheet.remision }}</strong>
+        </div>
+        <div>
+          <span>Estado</span>
+          <strong>{{ sheet.estado }}</strong>
+        </div>
+        <div>
+          <span>Cobranza</span>
+          <strong>{{ sheet.cobranza }}</strong>
+        </div>
+        <div>
+          <span>Total</span>
+          <strong>{{ fmtGs(sheet.total) }}</strong>
+        </div>
+        <div>
+          <span>IVA total</span>
+          <strong>{{ fmtGs(sheet.iva_total) }}</strong>
+        </div>
+        <div>
+          <span>Extra2</span>
+          <strong>{{ fmtGs(sheet.extra2) }}</strong>
+        </div>
+      </div>
+    </section>
+    <button type="button" class="primary-action" (click)="registrar()" [disabled]="saving()">
+      {{ saving() ? 'Registrando...' : (invoice.send_to_sheet ? 'Registrar y enviar' : 'Registrar factura') }}
+    </button>
+  </article>
+</main>

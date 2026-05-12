@@ -1,0 +1,263 @@
+<main class="layout">
+  <section class="header-band">
+    <div>
+      <span class="eyebrow">VENTAS</span>
+      <h1>Reportes de ventas</h1>
+      <p>Resumen por mes, semana y detalle de facturas con la misma base operativa del modulo PySide6.</p>
+    </div>
+    <div class="header-summary" *ngIf="resumen() as r">
+      <strong>{{ r.filtros_label }}</strong>
+      <span>{{ totalRows() }} lineas</span>
+    </div>
+  </section>
+
+  <section class="tabs-panel">
+    <button type="button" class="tab" [class.active]="activeTab() === 'mes'" (click)="setTab('mes')">Resumen por Mes</button>
+    <button type="button" class="tab" [class.active]="activeTab() === 'semana'" (click)="setTab('semana')">Resumen por Semana</button>
+    <button type="button" class="tab" [class.active]="activeTab() === 'detalle'" (click)="setTab('detalle')">Detalle y Facturas</button>
+  </section>
+
+  <p class="error" *ngIf="error()">{{ error() }}</p>
+
+  <ng-container *ngIf="activeTab() !== 'detalle' && resumen() as r">
+    <section class="kpis">
+      <article class="kpi" *ngFor="let kpi of r.kpis">
+        <span>{{ kpi.label }}</span>
+        <strong>{{ kpiValue(kpi.key, kpi.value) }}</strong>
+        <small [class]="trendClass(kpi.delta_pct)">{{ fmtPct(kpi.delta_pct) }}</small>
+      </article>
+    </section>
+
+    <section class="rankings">
+      <div class="ranking-controls">
+        <strong>Rankings</strong>
+        <label>
+          Alcance
+          <select [(ngModel)]="filters.ranking_scope" (change)="refresh()">
+            <option value="month">Mes concreto</option>
+            <option value="all">Todo el tiempo</option>
+          </select>
+        </label>
+        <label>
+          Mes
+          <select [(ngModel)]="filters.ranking_ym" (change)="refresh()" [disabled]="filters.ranking_scope !== 'month'">
+            <option *ngFor="let m of options().meses" [value]="m">{{ m }}</option>
+          </select>
+        </label>
+      </div>
+      <article>
+        <h2>Top 3 productos</h2>
+        <p *ngIf="r.top_productos.length === 0">Sin datos para el filtro actual.</p>
+        <ol>
+          <li *ngFor="let item of r.top_productos">
+            <span>{{ item.label }}</span>
+            <strong>{{ fmtGs(item.importe_gs) }} Gs</strong>
+          </li>
+        </ol>
+      </article>
+      <article>
+        <h2>Top 3 sucursales</h2>
+        <p *ngIf="r.top_sucursales.length === 0">Sin datos para el filtro actual.</p>
+        <ol>
+          <li *ngFor="let item of r.top_sucursales">
+            <span>{{ item.label }}</span>
+            <strong>{{ fmtGs(item.paquetes) }} paq.</strong>
+          </li>
+        </ol>
+      </article>
+    </section>
+  </ng-container>
+
+  <section class="filters-panel">
+    <label>
+      Producto
+      <select [(ngModel)]="filters.product_id">
+        <option [ngValue]="null">Todos</option>
+        <option *ngFor="let p of options().productos" [ngValue]="p.id">{{ p.name }}</option>
+      </select>
+    </label>
+    <label>
+      Gramaje
+      <select [(ngModel)]="filters.gramaje">
+        <option [ngValue]="null">Todos</option>
+        <option *ngFor="let g of options().gramajes" [ngValue]="g">{{ g }} g</option>
+      </select>
+    </label>
+    <label>
+      Mes
+      <select [(ngModel)]="filters.ym">
+        <option value="">Todos</option>
+        <option *ngFor="let m of options().meses" [value]="m">{{ m }}</option>
+      </select>
+    </label>
+    <label>
+      Desde
+      <input type="date" [(ngModel)]="filters.desde">
+    </label>
+    <label>
+      Hasta
+      <input type="date" [(ngModel)]="filters.hasta">
+    </label>
+    <button type="button" class="primary-action" (click)="activeTab() === 'detalle' ? cargarDetalle() : refresh()" [disabled]="loading() || detalleLoading()">
+      {{ loading() || detalleLoading() ? 'Cargando...' : 'Refrescar' }}
+    </button>
+    <button type="button" (click)="exportarCsv()">Exportar CSV</button>
+    <button type="button" (click)="limpiarFiltros()">Limpiar filtros</button>
+  </section>
+
+  <article class="panel" *ngIf="activeTab() !== 'detalle' && resumen() as r">
+    <header>
+      {{ activeTab() === 'mes' ? 'Resumen por mes' : 'Resumen por semana' }}
+      <div class="table-actions" *ngIf="activeTab() === 'mes'">
+        <button type="button" (click)="expandAll()">Desplegar todo</button>
+        <button type="button" (click)="collapseAll()">Contraer todo</button>
+      </div>
+      <span>{{ r.rows.length }} lineas</span>
+    </header>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Periodo</th>
+            <th>Producto</th>
+            <th class="num">g</th>
+            <th class="num">Paquetes</th>
+            <th class="num">Importe (Gs)</th>
+            <th class="num">Base (Gs)</th>
+            <th class="num">IVA (Gs)</th>
+            <th class="num">Luque</th>
+            <th class="num">Aregua</th>
+            <th class="num">Itaugua</th>
+            <th class="num">Vs mes ant.</th>
+            <th>Share %</th>
+          </tr>
+        </thead>
+        <tbody *ngIf="activeTab() === 'mes'">
+          <ng-container *ngFor="let group of groupedRows()">
+            <tr class="month-row" (click)="togglePeriod(group.periodo)">
+              <td>
+                <button type="button" class="expand-cell" [attr.aria-label]="isExpanded(group.periodo) ? 'Contraer mes' : 'Desplegar mes'">
+                  {{ isExpanded(group.periodo) ? '-' : '+' }}
+                </button>
+                <strong>{{ group.periodo }}</strong>
+              </td>
+              <td>
+                <strong>{{ group.periodo }}</strong>
+                <small>{{ group.rows.length }} productos / gramajes</small>
+              </td>
+              <td class="num">Total</td>
+              <td class="num">{{ fmtGs(group.paquetes) }}</td>
+              <td class="num">{{ fmtGs(group.importe_gs) }}</td>
+              <td class="num">{{ fmtGs(group.base_gs) }}</td>
+              <td class="num">{{ fmtGs(group.iva_gs) }}</td>
+              <td class="num">{{ fmtGs(group.luque) }}</td>
+              <td class="num">{{ fmtGs(group.aregua) }}</td>
+              <td class="num">{{ fmtGs(group.itaugua) }}</td>
+              <td class="num">-</td>
+              <td>
+                <div class="share-bar month-share">
+                  <span [style.width.%]="group.share_pct"></span>
+                  <strong>{{ group.share_pct | number:'1.0-0' }}%</strong>
+                </div>
+              </td>
+            </tr>
+            <tr *ngFor="let row of group.rows" class="detail-row" [class.hidden-row]="!isExpanded(group.periodo)">
+              <td>{{ row.periodo }}</td>
+              <td>
+                <span [class]="trendClass(row.delta_paquetes_pct)">o</span>
+                {{ row.producto }} <small>{{ fmtPct(row.delta_paquetes_pct) }}</small>
+              </td>
+              <td class="num">{{ row.gramaje }}</td>
+              <td class="num">{{ fmtGs(row.paquetes) }}</td>
+              <td class="num">{{ fmtGs(row.importe_gs) }}</td>
+              <td class="num">{{ fmtGs(row.base_gs) }}</td>
+              <td class="num">{{ fmtGs(row.iva_gs) }}</td>
+              <td class="num">{{ fmtGs(row.paq_luque) }}</td>
+              <td class="num">{{ fmtGs(row.paq_aregua) }}</td>
+              <td class="num">{{ fmtGs(row.paq_itaugua) }}</td>
+              <td class="num">
+                <strong [class]="trendClass(row.delta_paquetes_pct)">{{ fmtPct(row.delta_paquetes_pct) }}</strong>
+              </td>
+              <td>
+                <div class="share-bar">
+                  <span [style.width.%]="row.share_pct"></span>
+                  <strong>{{ row.share_pct | number:'1.0-0' }}%</strong>
+                </div>
+              </td>
+            </tr>
+          </ng-container>
+          <tr *ngIf="r.rows.length === 0">
+            <td colspan="12" class="empty">Sin datos para el filtro actual.</td>
+          </tr>
+        </tbody>
+        <tbody *ngIf="activeTab() === 'semana'">
+          <tr *ngFor="let row of r.rows">
+            <td>{{ row.periodo }}</td>
+            <td>
+              <span [class]="trendClass(row.delta_paquetes_pct)">o</span>
+              {{ row.producto }} <small>{{ fmtPct(row.delta_paquetes_pct) }}</small>
+            </td>
+            <td class="num">{{ row.gramaje }}</td>
+            <td class="num">{{ fmtGs(row.paquetes) }}</td>
+            <td class="num">{{ fmtGs(row.importe_gs) }}</td>
+            <td class="num">{{ fmtGs(row.base_gs) }}</td>
+            <td class="num">{{ fmtGs(row.iva_gs) }}</td>
+            <td class="num">{{ fmtGs(row.paq_luque) }}</td>
+            <td class="num">{{ fmtGs(row.paq_aregua) }}</td>
+            <td class="num">{{ fmtGs(row.paq_itaugua) }}</td>
+            <td class="num">
+              <strong [class]="trendClass(row.delta_paquetes_pct)">{{ fmtPct(row.delta_paquetes_pct) }}</strong>
+            </td>
+            <td>
+              <div class="share-bar">
+                <span [style.width.%]="row.share_pct"></span>
+                <strong>{{ row.share_pct | number:'1.0-0' }}%</strong>
+              </div>
+            </td>
+          </tr>
+          <tr *ngIf="r.rows.length === 0">
+            <td colspan="12" class="empty">Sin datos para el filtro actual.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </article>
+
+  <article class="panel" *ngIf="activeTab() === 'detalle'">
+    <header>
+      Detalle y facturas
+      <span>{{ detalle()?.rows?.length || 0 }} lineas</span>
+    </header>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Fecha</th>
+            <th>Nro factura</th>
+            <th>Cliente</th>
+            <th>Producto</th>
+            <th class="num">Gramaje</th>
+            <th class="num">Paquetes</th>
+            <th class="num">Precio unit.</th>
+            <th class="num">Importe</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let row of detalle()?.rows || []">
+            <td>{{ row.fecha }}</td>
+            <td>{{ row.nro_factura || '-' }}</td>
+            <td>{{ row.cliente || '-' }}</td>
+            <td>{{ row.producto }}</td>
+            <td class="num">{{ row.gramaje }} g</td>
+            <td class="num">{{ fmtGs(row.paquetes) }}</td>
+            <td class="num">{{ fmtGs(row.precio_unit) }}</td>
+            <td class="num">{{ fmtGs(row.importe_gs) }}</td>
+          </tr>
+          <tr *ngIf="(detalle()?.rows?.length || 0) === 0">
+            <td colspan="8" class="empty">Sin datos para el filtro actual.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </article>
+</main>

@@ -1,0 +1,85 @@
+<button
+  type="button"
+  class="burger-button"
+  aria-label="Abrir menu"
+  [attr.aria-expanded]="sidebarOpen()"
+  (click)="toggleSidebar()"
+>
+  <span></span>
+  <span></span>
+  <span></span>
+</button>
+
+<aside class="sidebar" [class.open]="sidebarOpen()" [class.expanded]="sidebarExpanded()">
+  <div class="brand">
+    <span>GC</span>
+    <strong>WebMK1</strong>
+  </div>
+
+  <nav>
+    <section>
+      <h2>Inicio</h2>
+      <a routerLink="/" routerLinkActive="active" [routerLinkActiveOptions]="{ exact: true }" (click)="closeSidebar()" title="Dashboard">
+        <span class="nav-icon">D</span><span class="nav-text">Dashboard</span>
+      </a>
+      <a routerLink="/inventario" routerLinkActive="active" (click)="closeSidebar()" title="Inventario">
+        <span class="nav-icon">I</span><span class="nav-text">Inventario</span>
+      </a>
+      <a routerLink="/productos" routerLinkActive="active" (click)="closeSidebar()" title="Productos">
+        <span class="nav-icon">P</span><span class="nav-text">Productos</span>
+      </a>
+    </section>
+    <section>
+      <h2>Operacion</h2>
+      <a routerLink="/fraccionamiento" routerLinkActive="active" (click)="closeSidebar()" title="Fraccionamiento">
+        <span class="nav-icon">F</span><span class="nav-text">Fraccionamiento</span>
+      </a>
+      <a routerLink="/resumenes" routerLinkActive="active" (click)="closeSidebar()" title="Resumenes">
+        <span class="nav-icon">R</span><span class="nav-text">Resumenes</span>
+      </a>
+      <a routerLink="/compra-materia-prima" routerLinkActive="active" (click)="closeSidebar()" title="Compra materia prima">
+        <span class="nav-icon">M</span><span class="nav-text">Compra materia prima</span>
+      </a>
+      <a routerLink="/ventas-paquetes" routerLinkActive="active" (click)="closeSidebar()" title="Ventas paquetes">
+        <span class="nav-icon">V</span><span class="nav-text">Ventas paquetes</span>
+      </a>
+      <a routerLink="/ordenes-compra" routerLinkActive="active" (click)="closeSidebar()" title="Importar OC">
+        <span class="nav-icon">OC</span><span class="nav-text">Importar OC</span>
+      </a>
+    </section>
+    <section>
+      <h2>Tesoreria</h2>
+      <a routerLink="/flujo-dinero" routerLinkActive="active" (click)="closeSidebar()" title="Flujo de dinero">
+        <span class="nav-icon">$</span><span class="nav-text">Flujo de dinero</span>
+      </a>
+      <a routerLink="/chequeras" routerLinkActive="active" (click)="closeSidebar()" title="Chequeras">
+        <span class="nav-icon">C</span><span class="nav-text">Chequeras</span>
+      </a>
+      <a routerLink="/gastos-egresos" routerLinkActive="active" (click)="closeSidebar()" title="Gastos y egresos">
+        <span class="nav-icon">G</span><span class="nav-text">Gastos y egresos</span>
+      </a>
+    </section>
+    <section>
+      <h2>Historiales</h2>
+      <a routerLink="/historial-compras" routerLinkActive="active" (click)="closeSidebar()" title="Historial compras">
+        <span class="nav-icon">HC</span><span class="nav-text">Historial compras</span>
+      </a>
+      <a routerLink="/historial-ventas" routerLinkActive="active" (click)="closeSidebar()" title="Historial ventas">
+        <span class="nav-icon">HV</span><span class="nav-text">Historial ventas</span>
+      </a>
+      <a routerLink="/reportes-ventas" routerLinkActive="active" (click)="closeSidebar()" title="Reportes ventas">
+        <span class="nav-icon">R</span><span class="nav-text">Reportes ventas</span>
+      </a>
+    </section>
+  </nav>
+</aside>
+
+<button
+  type="button"
+  class="sidebar-backdrop"
+  [class.visible]="sidebarOpen()"
+  aria-label="Cerrar menu"
+  (click)="closeSidebar()"
+></button>
+
+<router-outlet />

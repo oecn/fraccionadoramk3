@@ -1,0 +1,167 @@
+.header-band {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+.work-grid {
+  grid-template-columns: 1fr;
+}
+
+.invoice-grid {
+  grid-template-columns: 180px minmax(260px, 1fr) 160px;
+}
+
+.add-grid {
+  grid-template-columns: minmax(260px, 1fr) 130px auto;
+}
+
+.primary-action {
+  margin: 15px;
+}
+
+.primary-action.inline {
+  margin: 0;
+}
+
+.selected-info {
+  display: flex;
+  gap: 12px;
+  padding: 0 15px 15px;
+  color: #314256;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.tax-summary {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 10px;
+  padding: 14px 15px 0;
+}
+
+.tax-summary div {
+  display: grid;
+  gap: 5px;
+  padding: 10px;
+  border: 1px solid #d8e2ee;
+  border-radius: 8px;
+  background: #f8fbfd;
+  text-align: right;
+}
+
+.tax-summary span {
+  color: #66758d;
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.tax-summary strong {
+  color: #12314a;
+  font-size: 15px;
+}
+
+.table-wrap.compact {
+  max-height: 440px;
+}
+
+tbody tr.over-stock td {
+  background: #fee2e2 !important;
+  color: #7f1d1d;
+}
+
+tbody tr.over-stock .qty-input {
+  border-color: #dc2626;
+  background: #fff1f2;
+  color: #7f1d1d;
+}
+
+.qty-input {
+  width: 92px;
+  height: 30px;
+  text-align: right;
+}
+
+.total-cell {
+  color: #071326;
+  font-size: 16px;
+  font-weight: 950;
+}
+
+.warn {
+  color: #b45309;
+  font-weight: 900;
+}
+
+.sheet-preview {
+  display: grid;
+  gap: 10px;
+  padding: 14px 15px 0;
+}
+
+.sheet-toggle {
+  display: inline-flex;
+  grid-template: none;
+  align-items: center;
+  gap: 8px;
+  color: #314256;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.sheet-toggle input {
+  width: 16px;
+  height: 16px;
+  min-width: 16px;
+  padding: 0;
+}
+
+.sheet-row {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid #d8e2ee;
+  border-radius: 8px;
+  background: #f8fbfd;
+}
+
+.sheet-row.disabled {
+  opacity: 0.55;
+}
+
+.sheet-row div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.sheet-row span {
+  color: #66758d;
+  font-size: 11px;
+  font-weight: 850;
+}
+
+.sheet-row strong {
+  min-width: 0;
+  overflow: hidden;
+  color: #12314a;
+  font-size: 13px;
+  text-overflow: ellipsis;
+}
+
+@media (max-width: 900px) {
+  .header-band {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .work-grid,
+  .invoice-grid,
+  .add-grid,
+  .tax-summary,
+  .sheet-row {
+    grid-template-columns: 1fr;
+  }
+}

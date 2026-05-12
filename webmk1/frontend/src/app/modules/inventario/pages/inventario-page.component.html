@@ -1,0 +1,146 @@
+<main class="layout">
+  <section class="header-band">
+    <div>
+      <span class="eyebrow">CONTROL</span>
+      <h1>Inventario</h1>
+      <p>Stock actual de materia prima, paquetes listos para vender y lotes abiertos.</p>
+    </div>
+    <div class="header-summary">
+      <strong>{{ fmtNumber(summary().total_raw_kg) }} kg</strong>
+      <span>{{ summary().total_paquetes }} paquetes</span>
+    </div>
+  </section>
+
+  <p class="error" *ngIf="error()">{{ error() }}</p>
+
+  <section class="totals-grid">
+    <article class="metric">
+      <span>Materia prima</span>
+      <strong>{{ fmtNumber(summary().total_raw_kg) }} kg</strong>
+      <small>{{ fmtGs(summary().total_raw_valor_gs) }} Gs</small>
+    </article>
+    <article class="metric">
+      <span>Paquetes</span>
+      <strong>{{ summary().total_paquetes }}</strong>
+      <small>{{ summary().total_unidades }} unidades</small>
+    </article>
+    <article class="metric">
+      <span>Valor venta</span>
+      <strong>{{ fmtGs(summary().total_venta_gs) }} Gs</strong>
+      <small>Segun precios cargados</small>
+    </article>
+  </section>
+
+  <section class="stock-grid">
+    <article class="panel">
+      <header>Materia prima</header>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Producto</th>
+              <th class="num">Kg</th>
+              <th class="num">Bolsa 50</th>
+              <th class="num">Bolsa 25</th>
+              <th class="num">Lotes</th>
+              <th class="num">Costo prom.</th>
+              <th class="num">Valor</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let item of summary().raw_stock">
+              <td>
+                <span class="product-pill" [ngClass]="productPillClass(item.producto)">
+                  <span>{{ item.producto }}</span>
+                </span>
+              </td>
+              <td class="num">{{ fmtNumber(item.kg) }}</td>
+              <td class="num">{{ fmtNumber(item.bolsas_50) }}</td>
+              <td class="num">{{ fmtNumber(item.bolsas_25) }}</td>
+              <td class="num">{{ item.lotes_abiertos }}</td>
+              <td class="num">{{ fmtGs(item.costo_promedio_gs) }}</td>
+              <td class="num">{{ fmtGs(item.valor_stock_gs) }}</td>
+            </tr>
+            <tr *ngIf="summary().raw_stock.length === 0">
+              <td colspan="7" class="empty">Sin materia prima.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </article>
+
+    <article class="panel">
+      <header>Stock de paquetes</header>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Producto</th>
+              <th class="num">g</th>
+              <th class="num">Paquetes</th>
+              <th class="num">Unidades</th>
+              <th class="num">Precio</th>
+              <th class="num">IVA</th>
+              <th class="num">Valor venta</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let item of summary().package_stock">
+              <td>
+                <span class="product-pill" [ngClass]="productPillClass(item.producto)">
+                  <span>{{ item.producto }}</span>
+                </span>
+              </td>
+              <td class="num">{{ item.gramaje }}</td>
+              <td class="num">{{ item.paquetes }}</td>
+              <td class="num">{{ item.unidades }}</td>
+              <td class="num">{{ item.price_gs == null ? '-' : fmtGs(item.price_gs) }}</td>
+              <td class="num">{{ item.iva || '-' }}</td>
+              <td class="num">{{ fmtGs(item.valor_venta_gs) }}</td>
+            </tr>
+            <tr *ngIf="summary().package_stock.length === 0">
+              <td colspan="7" class="empty">Sin paquetes.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </article>
+  </section>
+
+  <article class="panel">
+    <header>Lotes abiertos</header>
+    <div class="table-wrap compact">
+      <table>
+        <thead>
+          <tr>
+            <th>Producto</th>
+            <th>Lote</th>
+            <th>Proveedor</th>
+            <th>Factura</th>
+            <th class="num">Kg saldo</th>
+            <th class="num">Costo kg</th>
+            <th class="num">Valor saldo</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let lote of summary().lotes_abiertos">
+            <td>
+              <span class="product-pill" [ngClass]="productPillClass(lote.producto)">
+                <span>{{ lote.producto }}</span>
+              </span>
+            </td>
+            <td>{{ lote.lote || '-' }}</td>
+            <td>{{ lote.proveedor || '-' }}</td>
+            <td>{{ lote.factura || '-' }}</td>
+            <td class="num">{{ fmtNumber(lote.kg_saldo) }}</td>
+            <td class="num">{{ fmtGs(lote.costo_kg_gs) }}</td>
+            <td class="num">{{ fmtGs(lote.valor_saldo_gs) }}</td>
+          </tr>
+          <tr *ngIf="summary().lotes_abiertos.length === 0">
+            <td colspan="7" class="empty">Sin lotes abiertos.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </article>
+</main>

@@ -1,0 +1,28 @@
+.work-grid {
+  grid-template-columns: minmax(340px, 0.7fr) minmax(0, 1.3fr);
+}
+
+.stock-grid {
+  grid-template-columns: minmax(340px, 0.65fr) minmax(0, 1.35fr);
+}
+
+.form-grid {
+  grid-template-columns: repeat(2, minmax(150px, 1fr));
+}
+
+.checkbook-grid {
+  grid-template-columns: repeat(4, minmax(130px, 1fr));
+}
+
+.primary-action {
+  margin: 0 15px 15px;
+}
+
+@media (max-width: 900px) {
+  .work-grid,
+  .stock-grid,
+  .form-grid,
+  .checkbook-grid {
+    grid-template-columns: 1fr;
+  }
+}
