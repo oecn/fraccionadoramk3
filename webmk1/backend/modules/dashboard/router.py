@@ -7,6 +7,7 @@ from modules.dashboard.schemas import (
     PaymentCheckOption,
     PaymentCheckStatus,
     PaymentDetailRow,
+    PaymentInvoiceDetail,
     PaymentReceiptUpdateRequest,
     PaymentReceiptUpdateResponse,
     PaymentRegisterRequest,
@@ -66,6 +67,14 @@ def register_payment(payload: PaymentRegisterRequest) -> PaymentRegisterResponse
 @router.get("/payments/details", response_model=list[PaymentDetailRow])
 def payment_details() -> list[PaymentDetailRow]:
     return DashboardRepository().payment_details()
+
+
+@router.get("/payments/invoices/{lot_id}", response_model=PaymentInvoiceDetail)
+def payment_invoice_detail(lot_id: int) -> PaymentInvoiceDetail:
+    try:
+        return DashboardRepository().payment_invoice_detail(lot_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
 @router.post("/payments/receipt", response_model=PaymentReceiptUpdateResponse)

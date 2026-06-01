@@ -72,6 +72,7 @@
 }
 
 .sidebar.expanded .brand {
+  padding-left: 54px;
   text-align: left;
 }
 
@@ -89,31 +90,77 @@ nav {
   margin-top: 16px;
 }
 
-nav section {
+.nav-section {
   display: grid;
   gap: 5px;
   padding-bottom: 8px;
   border-bottom: 1px solid #e3ebf4;
 }
 
-nav section:last-child {
+.nav-section:last-child {
   border-bottom: 0;
 }
 
-nav h2 {
-  display: none;
-  margin: 0 0 2px;
-  color: #6b7a90;
-  font-size: 11px;
-  font-weight: 900;
+.nav-section summary {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 38px;
+  padding: 0 10px;
+  border-radius: 8px;
+  color: #526277;
+  font-size: 12px;
+  font-weight: 950;
+  list-style: none;
   text-transform: uppercase;
+  cursor: pointer;
 }
 
-.sidebar.expanded nav h2 {
-  display: block;
+.sidebar:not(.expanded) .nav-section summary {
+  justify-content: center;
+  padding: 0;
 }
 
-nav a {
+.nav-section summary::-webkit-details-marker {
+  display: none;
+}
+
+.nav-section summary::after {
+  content: 'v';
+  margin-left: auto;
+  color: #8b9aad;
+  font-size: 10px;
+}
+
+.nav-section:not([open]) summary::after {
+  content: '>';
+}
+
+.sidebar:not(.expanded) .nav-section summary::after {
+  display: none;
+}
+
+.module-icon {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  width: 26px;
+  min-width: 26px;
+  height: 26px;
+  border-radius: 8px;
+  background: #dff3f1;
+  color: #006d76;
+  font-size: 10px;
+  font-weight: 950;
+}
+
+.submenu {
+  display: grid;
+  gap: 5px;
+}
+
+nav a,
+.nav-placeholder {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -126,9 +173,16 @@ nav a {
   text-decoration: none;
 }
 
-.sidebar.expanded nav a {
+nav a,
+.nav-placeholder {
   justify-content: flex-start;
   padding: 0 10px;
+}
+
+.sidebar:not(.expanded) nav a,
+.sidebar:not(.expanded) .nav-placeholder {
+  justify-content: center;
+  padding: 0 7px;
 }
 
 nav a:hover {
@@ -142,6 +196,7 @@ nav a.active {
 }
 
 .nav-icon {
+  position: relative;
   display: inline-grid;
   place-items: center;
   width: 32px;
@@ -154,9 +209,40 @@ nav a.active {
   font-weight: 950;
 }
 
+.nav-badge {
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  display: inline-grid;
+  place-items: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border: 2px solid #ffffff;
+  border-radius: 999px;
+  background: #dc2626;
+  color: #ffffff;
+  font-size: 10px;
+  font-style: normal;
+  font-weight: 950;
+  line-height: 1;
+  box-shadow: 0 4px 10px rgba(220, 38, 38, 0.35);
+}
+
 nav a.active .nav-icon {
   background: rgba(255, 255, 255, 0.18);
   color: #ffffff;
+}
+
+.nav-placeholder {
+  color: #8b9aad;
+  cursor: default;
+}
+
+.nav-placeholder .nav-icon {
+  background: #eef2f6;
+  color: #7b8ba0;
+  font-size: 9px;
 }
 
 .nav-text {
@@ -185,15 +271,161 @@ nav a.active .nav-icon {
   display: none;
 }
 
-:host ::ng-deep router-outlet + * {
+.app-content {
   display: block;
+  padding-top: 74px;
   padding-left: 74px;
+}
+
+.app-content.sidebar-expanded {
+  padding-left: 286px;
+}
+
+.topbar {
+  position: fixed;
+  top: 0;
+  right: 0;
+  left: 74px;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  min-height: 64px;
+  padding: 10px 22px;
+  border-bottom: 1px solid #dbe4ef;
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 8px 20px rgba(31, 56, 91, 0.08);
+}
+
+.topbar.sidebar-expanded {
+  left: 286px;
+}
+
+.global-search {
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex: 1;
+  min-width: 220px;
+  max-width: 560px;
+}
+
+.search-icon {
+  position: absolute;
+  left: 12px;
+  display: inline-grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 7px;
+  background: #e8eef5;
+  color: #526277;
+  font-size: 11px;
+  font-weight: 950;
+}
+
+.global-search input {
+  width: 100%;
+  height: 42px;
+  padding: 0 12px 0 44px;
+  border: 1px solid #d7e1ec;
+  border-radius: 8px;
+  background: #f8fbfd;
+  color: #102033;
+  font: inherit;
+  font-weight: 800;
+  outline: none;
+}
+
+.global-search input:focus {
+  border-color: #006d76;
+  box-shadow: 0 0 0 3px rgba(0, 109, 118, 0.12);
+}
+
+.search-results {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  left: 0;
+  display: grid;
+  gap: 4px;
+  padding: 8px;
+  border: 1px solid #dbe4ef;
+  border-radius: 8px;
+  background: #ffffff;
+  box-shadow: 0 14px 34px rgba(31, 56, 91, 0.16);
+}
+
+.search-results a {
+  padding: 10px 12px;
+  border-radius: 7px;
+  color: #263f53;
+  font-weight: 900;
+  text-decoration: none;
+}
+
+.search-results a:hover {
+  background: #eaf3f8;
+}
+
+.quick-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.quick-actions a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 38px;
+  padding: 0 12px;
+  border-radius: 8px;
+  background: #006d76;
+  color: #ffffff;
+  font-size: 13px;
+  font-weight: 950;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.quick-actions a:nth-child(2) {
+  background: #12314a;
+}
+
+.quick-actions a:nth-child(3) {
+  background: #4f6f52;
 }
 
 @media (max-width: 760px) {
   .burger-button {
     top: 12px;
     left: 12px;
+  }
+
+  .topbar {
+    left: 0;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 10px 12px 10px 64px;
+  }
+
+  .global-search {
+    order: 2;
+    width: 100%;
+    max-width: none;
+  }
+
+  .quick-actions {
+    overflow-x: auto;
+    width: 100%;
+    margin-left: 0;
+    padding-bottom: 2px;
+  }
+
+  .quick-actions a {
+    min-height: 34px;
+    font-size: 12px;
   }
 
   .sidebar {
@@ -203,25 +435,48 @@ nav a.active .nav-icon {
     transform: translateX(-104%);
   }
 
+  .sidebar.expanded {
+    width: min(320px, 86vw);
+    padding: 18px;
+  }
+
   .sidebar.open {
     transform: translateX(0);
   }
 
   .brand,
   .sidebar.expanded .brand {
+    padding-left: 54px;
     text-align: left;
   }
 
+  .brand span,
+  .sidebar.expanded .brand span {
+    margin: 0;
+  }
+
   .brand strong,
-  .sidebar.expanded .brand strong,
-  nav h2,
-  .sidebar.expanded nav h2,
-  .nav-text,
-  .sidebar.expanded .nav-text {
+  .nav-text {
     display: block;
   }
 
-  nav a {
+  .sidebar:not(.expanded) .nav-section summary,
+  .nav-section summary {
+    justify-content: flex-start;
+    padding: 0 10px;
+  }
+
+  .sidebar:not(.expanded) .nav-section summary::after {
+    display: block;
+  }
+
+  .sidebar.expanded .nav-text,
+  .sidebar:not(.expanded) .nav-text {
+    display: block;
+  }
+
+  nav a,
+  .nav-placeholder {
     justify-content: flex-start;
     padding: 0 12px;
   }
@@ -230,7 +485,9 @@ nav a.active .nav-icon {
     display: block;
   }
 
-  :host ::ng-deep router-outlet + * {
+  .app-content,
+  .app-content.sidebar-expanded {
+    padding-top: 124px;
     padding-left: 0;
   }
 }

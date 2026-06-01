@@ -7,6 +7,7 @@
       <div class="hero-badges" *ngIf="data() as d">
         <span>{{ d.year }}</span>
         <span>{{ d.quarter }}</span>
+        <span>{{ d.include_iva ? 'Con IVA' : 'Sin IVA' }}</span>
         <span>{{ d.retencion_mode ? 'Con retencion' : 'Total' }}</span>
         <span>Saldo inicial Gs. {{ fmtGs(d.saldo_inicial) }}</span>
       </div>
@@ -54,6 +55,13 @@
         <label>
           Hasta
           <input type="date" [(ngModel)]="filters.to_date" (change)="refresh()">
+        </label>
+        <label>
+          IVA
+          <select [(ngModel)]="filters.include_iva" (change)="refresh()">
+            <option [ngValue]="true">Con IVA</option>
+            <option [ngValue]="false">Sin IVA</option>
+          </select>
         </label>
         <label>
           Vista ventas
@@ -110,6 +118,24 @@
             role="img"
             aria-label="Grafico mensual de flujo de dinero"
           >
+            <ng-container *ngFor="let q of quarterBands(d)">
+              <rect
+                class="quarter-band"
+                [ngClass]="quarterTone(q)"
+                [attr.x]="q.x"
+                [attr.y]="chart.top"
+                [attr.width]="q.width"
+                [attr.height]="chart.height - chart.top - chart.bottom"
+                rx="8"
+              ></rect>
+              <text
+                class="quarter-label"
+                [attr.x]="q.labelX"
+                [attr.y]="chart.top + 14"
+                text-anchor="middle"
+              >{{ q.quarter }}</text>
+            </ng-container>
+
             <line
               class="axis"
               [attr.x1]="chart.left"
@@ -187,6 +213,26 @@
           <span><i class="dot flujo"></i>Flujo neto</span>
           <span><i class="dot acumulado"></i>Acumulado</span>
         </footer>
+        <section class="quarter-kpis">
+          <article class="quarter-card" *ngFor="let q of d.quarter_rows" [ngClass]="quarterTone(q)">
+            <header>
+              <strong>{{ q.label }}</strong>
+              <span>{{ q.start_month }} - {{ q.end_month }}</span>
+            </header>
+            <div class="quarter-grid">
+              <div><span>Inicio</span><strong>{{ fmtGs(q.saldo_inicio) }}</strong></div>
+              <div><span>Fin</span><strong>{{ fmtGs(q.saldo_fin) }}</strong></div>
+              <div><span>Ventas</span><strong>{{ fmtGs(q.ventas) }}</strong></div>
+              <div><span>Compras</span><strong>{{ fmtGs(q.compras) }}</strong></div>
+              <div><span>Gastos</span><strong>{{ fmtGs(q.gastos) }}</strong></div>
+              <div><span>{{ q.profitable ? 'Ganancia' : 'Perdida' }}</span><strong>{{ fmtGs(q.flujo) }}</strong></div>
+            </div>
+            <p>
+              Margen {{ q.margen | number:'1.1-1' }}%.
+              Para mejorar: aumentar ventas cobradas, bajar compras/gastos o revisar notas de credito.
+            </p>
+          </article>
+        </section>
       </article>
     </section>
   </ng-container>

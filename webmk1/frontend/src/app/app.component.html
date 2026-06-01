@@ -2,13 +2,42 @@
   type="button"
   class="burger-button"
   aria-label="Abrir menu"
-  [attr.aria-expanded]="sidebarOpen()"
+  [attr.aria-expanded]="sidebarOpen() || sidebarExpanded()"
   (click)="toggleSidebar()"
 >
   <span></span>
   <span></span>
   <span></span>
 </button>
+
+<header class="topbar" [class.sidebar-expanded]="sidebarExpanded()">
+  <div class="global-search">
+    <span class="search-icon">S</span>
+    <input
+      type="search"
+      placeholder="Buscar modulo, compra, venta, stock..."
+      [value]="searchQuery()"
+      (input)="updateSearch($event)"
+      (keydown.enter)="goToFirstSearchResult()"
+      aria-label="Buscador global"
+    />
+    <div class="search-results" *ngIf="searchResults().length > 0">
+      <a
+        *ngFor="let result of searchResults()"
+        [routerLink]="result.route"
+        (click)="clearSearch(); closeSidebar()"
+      >
+        {{ result.label }}
+      </a>
+    </div>
+  </div>
+
+  <div class="quick-actions" aria-label="Acciones rapidas">
+    <a routerLink="/ventas-paquetes">Nueva venta</a>
+    <a routerLink="/compra-materia-prima">Nueva compra</a>
+    <a routerLink="/cobros-facturas">Registrar cobro</a>
+  </div>
+</header>
 
 <aside class="sidebar" [class.open]="sidebarOpen()" [class.expanded]="sidebarExpanded()">
   <div class="brand">
@@ -17,60 +46,125 @@
   </div>
 
   <nav>
-    <section>
-      <h2>Inicio</h2>
+    <section class="nav-section">
       <a routerLink="/" routerLinkActive="active" [routerLinkActiveOptions]="{ exact: true }" (click)="closeSidebar()" title="Dashboard">
         <span class="nav-icon">D</span><span class="nav-text">Dashboard</span>
       </a>
-      <a routerLink="/inventario" routerLinkActive="active" (click)="closeSidebar()" title="Inventario">
-        <span class="nav-icon">I</span><span class="nav-text">Inventario</span>
-      </a>
-      <a routerLink="/productos" routerLinkActive="active" (click)="closeSidebar()" title="Productos">
-        <span class="nav-icon">P</span><span class="nav-text">Productos</span>
-      </a>
     </section>
-    <section>
-      <h2>Operacion</h2>
-      <a routerLink="/fraccionamiento" routerLinkActive="active" (click)="closeSidebar()" title="Fraccionamiento">
-        <span class="nav-icon">F</span><span class="nav-text">Fraccionamiento</span>
-      </a>
-      <a routerLink="/resumenes" routerLinkActive="active" (click)="closeSidebar()" title="Resumenes">
-        <span class="nav-icon">R</span><span class="nav-text">Resumenes</span>
-      </a>
-      <a routerLink="/compra-materia-prima" routerLinkActive="active" (click)="closeSidebar()" title="Compra materia prima">
-        <span class="nav-icon">M</span><span class="nav-text">Compra materia prima</span>
-      </a>
-      <a routerLink="/ventas-paquetes" routerLinkActive="active" (click)="closeSidebar()" title="Ventas paquetes">
-        <span class="nav-icon">V</span><span class="nav-text">Ventas paquetes</span>
-      </a>
-      <a routerLink="/ordenes-compra" routerLinkActive="active" (click)="closeSidebar()" title="Importar OC">
-        <span class="nav-icon">OC</span><span class="nav-text">Importar OC</span>
-      </a>
-    </section>
-    <section>
-      <h2>Tesoreria</h2>
-      <a routerLink="/flujo-dinero" routerLinkActive="active" (click)="closeSidebar()" title="Flujo de dinero">
-        <span class="nav-icon">$</span><span class="nav-text">Flujo de dinero</span>
-      </a>
-      <a routerLink="/chequeras" routerLinkActive="active" (click)="closeSidebar()" title="Chequeras">
-        <span class="nav-icon">C</span><span class="nav-text">Chequeras</span>
-      </a>
-      <a routerLink="/gastos-egresos" routerLinkActive="active" (click)="closeSidebar()" title="Gastos y egresos">
-        <span class="nav-icon">G</span><span class="nav-text">Gastos y egresos</span>
-      </a>
-    </section>
-    <section>
-      <h2>Historiales</h2>
-      <a routerLink="/historial-compras" routerLinkActive="active" (click)="closeSidebar()" title="Historial compras">
-        <span class="nav-icon">HC</span><span class="nav-text">Historial compras</span>
-      </a>
-      <a routerLink="/historial-ventas" routerLinkActive="active" (click)="closeSidebar()" title="Historial ventas">
-        <span class="nav-icon">HV</span><span class="nav-text">Historial ventas</span>
-      </a>
-      <a routerLink="/reportes-ventas" routerLinkActive="active" (click)="closeSidebar()" title="Reportes ventas">
-        <span class="nav-icon">R</span><span class="nav-text">Reportes ventas</span>
-      </a>
-    </section>
+    <details class="nav-section" (toggle)="setComprasOpen($event)">
+      <summary>
+        <span class="module-icon">
+          C
+          <em class="nav-badge" *ngIf="ocAlertsCount() > 0 && (!sidebarExpanded() || !comprasOpen())">{{ ocAlertsCount() }}</em>
+        </span>
+        <span class="nav-text">Compras</span>
+      </summary>
+      <div class="submenu">
+        <a routerLink="/compra-materia-prima" routerLinkActive="active" (click)="closeSidebar()" title="Compra materia prima">
+          <span class="nav-icon">CM</span><span class="nav-text">Compra materia prima</span>
+        </a>
+        <a routerLink="/ordenes-compra" routerLinkActive="active" (click)="closeSidebar()" title="Ordenes de compra">
+          <span class="nav-icon">
+            OC
+            <em class="nav-badge" *ngIf="ocAlertsCount() > 0 && sidebarExpanded() && comprasOpen()">{{ ocAlertsCount() }}</em>
+          </span>
+          <span class="nav-text">Ordenes de compra</span>
+        </a>
+        <a routerLink="/historial-compras" routerLinkActive="active" (click)="closeSidebar()" title="Historial compras">
+          <span class="nav-icon">HC</span><span class="nav-text">Historial compras</span>
+        </a>
+      </div>
+    </details>
+    <details class="nav-section">
+      <summary><span class="module-icon">V</span><span class="nav-text">Ventas</span></summary>
+      <div class="submenu">
+        <a routerLink="/ventas-paquetes" routerLinkActive="active" (click)="closeSidebar()" title="Ventas paquetes">
+          <span class="nav-icon">VP</span><span class="nav-text">Ventas paquetes</span>
+        </a>
+        <a routerLink="/historial-ventas" routerLinkActive="active" (click)="closeSidebar()" title="Historial ventas">
+          <span class="nav-icon">HV</span><span class="nav-text">Historial ventas</span>
+        </a>
+        <a routerLink="/reportes-ventas" routerLinkActive="active" (click)="closeSidebar()" title="Reportes ventas">
+          <span class="nav-icon">RV</span><span class="nav-text">Reportes ventas</span>
+        </a>
+      </div>
+    </details>
+    <details class="nav-section" (toggle)="setStockOpen($event)">
+      <summary>
+        <span class="module-icon">
+          S
+          <em class="nav-badge" *ngIf="rawAlertsCount() > 0 && (!sidebarExpanded() || !stockOpen())">{{ rawAlertsCount() }}</em>
+        </span>
+        <span class="nav-text">Stock</span>
+      </summary>
+      <div class="submenu">
+        <a routerLink="/inventario" routerLinkActive="active" (click)="closeSidebar()" title="Inventario">
+          <span class="nav-icon">
+            I
+            <em class="nav-badge" *ngIf="rawAlertsCount() > 0 && sidebarExpanded() && stockOpen()">{{ rawAlertsCount() }}</em>
+          </span>
+          <span class="nav-text">Inventario</span>
+        </a>
+        <a routerLink="/productos" routerLinkActive="active" (click)="closeSidebar()" title="Productos">
+          <span class="nav-icon">P</span><span class="nav-text">Productos</span>
+        </a>
+        <a routerLink="/fraccionamiento" routerLinkActive="active" (click)="closeSidebar()" title="Fraccionamiento">
+          <span class="nav-icon">F</span><span class="nav-text">Fraccionamiento</span>
+        </a>
+        <a routerLink="/produccion" routerLinkActive="active" (click)="closeSidebar()" title="Rendimiento maquina">
+          <span class="nav-icon">RM</span><span class="nav-text">Rendimiento maquina</span>
+        </a>
+      </div>
+    </details>
+    <details class="nav-section" (toggle)="setFacturacionOpen($event)">
+      <summary>
+        <span class="module-icon">
+          F
+          <em class="nav-badge" *ngIf="cobrosAlertsCount() > 0 && (!sidebarExpanded() || !facturacionOpen())">{{ cobrosAlertsCount() }}</em>
+        </span>
+        <span class="nav-text">Facturacion</span>
+      </summary>
+      <div class="submenu">
+        <a routerLink="/cobros-facturas" routerLinkActive="active" (click)="closeSidebar()" title="Cobros facturas">
+          <span class="nav-icon">
+            CF
+            <em class="nav-badge" *ngIf="cobrosAlertsCount() > 0 && sidebarExpanded() && facturacionOpen()">{{ cobrosAlertsCount() }}</em>
+          </span>
+          <span class="nav-text">Cobros facturas</span>
+        </a>
+        <a routerLink="/flujo-dinero" routerLinkActive="active" (click)="closeSidebar()" title="Flujo de dinero">
+          <span class="nav-icon">$</span><span class="nav-text">Flujo de dinero</span>
+        </a>
+        <a routerLink="/chequeras" routerLinkActive="active" (click)="closeSidebar()" title="Chequeras">
+          <span class="nav-icon">C</span><span class="nav-text">Chequeras</span>
+        </a>
+        <a routerLink="/gastos-egresos" routerLinkActive="active" (click)="closeSidebar()" title="Gastos y egresos">
+          <span class="nav-icon">G</span><span class="nav-text">Gastos y egresos</span>
+        </a>
+      </div>
+    </details>
+    <details class="nav-section">
+      <summary><span class="module-icon">R</span><span class="nav-text">Reportes</span></summary>
+      <div class="submenu">
+        <a routerLink="/resumenes" routerLinkActive="active" (click)="closeSidebar()" title="Resumenes">
+          <span class="nav-icon">R</span><span class="nav-text">Resumenes</span>
+        </a>
+        <a routerLink="/analisis" routerLinkActive="active" (click)="closeSidebar()" title="Analisis">
+          <span class="nav-icon">A</span><span class="nav-text">Analisis</span>
+        </a>
+        <a routerLink="/estadisticas" routerLinkActive="active" (click)="closeSidebar()" title="Estadisticas">
+          <span class="nav-icon">E</span><span class="nav-text">Estadisticas</span>
+        </a>
+      </div>
+    </details>
+    <details class="nav-section">
+      <summary><span class="module-icon">G</span><span class="nav-text">Sistema</span></summary>
+      <div class="submenu">
+        <span class="nav-placeholder" title="Configuracion pendiente">
+          <span class="nav-icon">CFG</span><span class="nav-text">Configuracion</span>
+        </span>
+      </div>
+    </details>
   </nav>
 </aside>
 
@@ -82,4 +176,6 @@
   (click)="closeSidebar()"
 ></button>
 
-<router-outlet />
+<main class="app-content" [class.sidebar-expanded]="sidebarExpanded()">
+  <router-outlet />
+</main>

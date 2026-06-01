@@ -6,9 +6,11 @@ import { environment } from '../../../environments/environment';
 import {
   ConsumoPreview,
   FraccionamientoCreate,
+  FraccionamientoDeleteResponse,
   FraccionamientoHistoryRow,
   FraccionamientoOptions,
   FraccionamientoSummary,
+  FraccionamientoUpdate,
 } from './models/fraccionamiento.models';
 
 @Injectable({ providedIn: 'root' })
@@ -40,5 +42,13 @@ export class FraccionamientoService {
 
   registrar(payload: FraccionamientoCreate): Observable<FraccionamientoHistoryRow> {
     return this.http.post<FraccionamientoHistoryRow>(`${this.baseUrl}/registrar`, payload);
+  }
+
+  actualizar(id: number, payload: FraccionamientoUpdate): Observable<FraccionamientoHistoryRow> {
+    return this.http.put<FraccionamientoHistoryRow>(`${this.baseUrl}/${id}`, payload);
+  }
+
+  eliminar(id: number): Observable<FraccionamientoDeleteResponse> {
+    return this.http.delete<FraccionamientoDeleteResponse>(`${this.baseUrl}/${id}`);
   }
 }

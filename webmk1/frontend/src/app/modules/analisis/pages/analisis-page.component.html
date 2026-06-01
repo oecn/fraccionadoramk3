@@ -1,0 +1,108 @@
+<main class="layout">
+  <section class="header-band">
+    <div>
+      <span class="eyebrow">ANALISIS</span>
+      <h1>Analisis operativo</h1>
+      <p>Ranking de clientes y proyeccion de compras segun consumo reciente.</p>
+    </div>
+    <div class="header-summary">
+      <strong>{{ clientes()?.total_clientes || 0 }} clientes</strong>
+      <span>{{ fmtGs(clientes()?.total_gs || 0) }} Gs acumulados</span>
+    </div>
+  </section>
+
+  <p class="error" *ngIf="error()">{{ error() }}</p>
+
+  <section class="grid">
+    <article class="panel">
+      <header>
+        <span>Analitica de clientes</span>
+        <div class="filters">
+          <label>
+            Top
+            <input type="number" min="1" max="200" [(ngModel)]="topClientes">
+          </label>
+          <button type="button" (click)="loadClientes()" [disabled]="loadingClientes()">
+            {{ loadingClientes() ? 'Cargando...' : 'Refrescar' }}
+          </button>
+        </div>
+      </header>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Cliente</th>
+              <th class="num">Ops</th>
+              <th class="num">Fact.</th>
+              <th class="num">Bolsas</th>
+              <th class="num">Monto</th>
+              <th class="num">Ticket prom.</th>
+              <th>Ultima compra</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let row of clientes()?.rows || []">
+              <td>{{ row.cliente }}</td>
+              <td class="num">{{ row.ops }}</td>
+              <td class="num">{{ row.facturas }}</td>
+              <td class="num">{{ row.bolsas }}</td>
+              <td class="num">{{ fmtGs(row.total_gs) }}</td>
+              <td class="num">{{ fmtGs(row.ticket_prom) }}</td>
+              <td>{{ row.last_ts || '-' }}</td>
+            </tr>
+            <tr *ngIf="!loadingClientes() && (clientes()?.rows || []).length === 0">
+              <td colspan="7" class="empty">Sin datos de clientes.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </article>
+
+    <article class="panel">
+      <header>
+        <span>Proyeccion de compras</span>
+        <div class="filters">
+          <label>
+            Ventana
+            <input type="number" min="1" max="365" [(ngModel)]="ventanaDias">
+          </label>
+          <label>
+            Top
+            <input type="number" min="1" max="200" [(ngModel)]="topProductos">
+          </label>
+          <button type="button" (click)="loadProyeccion()" [disabled]="loadingProyeccion()">
+            {{ loadingProyeccion() ? 'Cargando...' : 'Refrescar' }}
+          </button>
+        </div>
+      </header>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Producto</th>
+              <th class="num">Stock kg</th>
+              <th class="num">Consumo/dia</th>
+              <th class="num">Dias restantes</th>
+              <th class="num">Consumo ventana</th>
+              <th class="num">Dias activos</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let row of proyeccion()?.rows || []">
+              <td>{{ row.producto }}</td>
+              <td class="num">{{ fmtKg(row.stock_kg) }}</td>
+              <td class="num">{{ fmtKg(row.consumo_diario) }}</td>
+              <td class="num"><span class="pill" [ngClass]="urgencyClass(row.dias_restantes)">{{ diasLabel(row.dias_restantes) }}</span></td>
+              <td class="num">{{ fmtKg(row.consumo_total) }}</td>
+              <td class="num">{{ row.dias_activos }}</td>
+            </tr>
+            <tr *ngIf="!loadingProyeccion() && (proyeccion()?.rows || []).length === 0">
+              <td colspan="6" class="empty">Sin datos de proyeccion.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </article>
+  </section>
+</main>
+

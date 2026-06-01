@@ -8,10 +8,13 @@
     <div class="header-summary">
       <strong>{{ fmtNumber(summary().total_raw_kg) }} kg</strong>
       <span>{{ summary().total_paquetes }} paquetes</span>
+      <button type="button" class="secondary-action" (click)="openSuggested()">Sugerido de compra</button>
+      <button type="button" class="primary-action inline" (click)="openAdjustments()">Modificar inventario</button>
     </div>
   </section>
 
   <p class="error" *ngIf="error()">{{ error() }}</p>
+  <p class="message" *ngIf="message()">{{ message() }}</p>
 
   <section class="totals-grid">
     <article class="metric">
@@ -29,17 +32,38 @@
       <strong>{{ fmtGs(summary().total_venta_gs) }} Gs</strong>
       <small>Segun precios cargados</small>
     </article>
+    <article class="metric" [class.alert]="summary().raw_alerts_count > 0">
+      <span>Alertas MP</span>
+      <strong>{{ summary().raw_alerts_count }}</strong>
+      <small>{{ summary().raw_alerts_count > 0 ? 'materias primas bajas' : 'sin alertas' }}</small>
+      <a
+        *ngIf="lowStockItems().length > 0"
+        class="whatsapp-action"
+        [href]="whatsappAllLowUrl()"
+        target="_blank"
+        rel="noopener"
+      >
+        Pedir todas
+      </a>
+    </article>
   </section>
 
   <section class="stock-grid">
     <article class="panel">
-      <header>Materia prima</header>
+      <header>
+        <span>Materia prima</span>
+        <button type="button" class="secondary-action" (click)="openAlerts()">Definir alertas</button>
+      </header>
       <div class="table-wrap">
         <table>
           <thead>
             <tr>
               <th>Producto</th>
               <th class="num">Kg</th>
+              <th class="num">Alerta bolsas</th>
+              <th class="num">A pedir</th>
+              <th>Estado</th>
+              <th>Reposicion</th>
               <th class="num">Bolsa 50</th>
               <th class="num">Bolsa 25</th>
               <th class="num">Lotes</th>
@@ -48,13 +72,25 @@
             </tr>
           </thead>
           <tbody>
-            <tr *ngFor="let item of summary().raw_stock">
+            <tr *ngFor="let item of summary().raw_stock" [ngClass]="alertRowClass(item.alerta_estado)">
               <td>
                 <span class="product-pill" [ngClass]="productPillClass(item.producto)">
                   <span>{{ item.producto }}</span>
                 </span>
               </td>
               <td class="num">{{ fmtNumber(item.kg) }}</td>
+              <td class="num">
+                {{ item.alerta_min_bolsas == null ? '-' : fmtNumber(item.alerta_min_bolsas) }}
+                <small *ngIf="item.alerta_min_bolsas != null">x {{ item.alerta_bolsa_kg | number:'1.0-0' }}kg</small>
+              </td>
+              <td class="num">{{ item.reposicion_bolsas == null ? '-' : fmtNumber(item.reposicion_bolsas) }}</td>
+              <td><span class="alert-pill" [ngClass]="item.alerta_estado">{{ alertLabel(item.alerta_estado) }}</span></td>
+              <td>
+                <a *ngIf="item.alerta_estado === 'bajo'" class="whatsapp-action" [href]="whatsappUrl(item)" target="_blank" rel="noopener">
+                  WhatsApp
+                </a>
+                <span *ngIf="item.alerta_estado !== 'bajo'">-</span>
+              </td>
               <td class="num">{{ fmtNumber(item.bolsas_50) }}</td>
               <td class="num">{{ fmtNumber(item.bolsas_25) }}</td>
               <td class="num">{{ item.lotes_abiertos }}</td>
@@ -62,7 +98,7 @@
               <td class="num">{{ fmtGs(item.valor_stock_gs) }}</td>
             </tr>
             <tr *ngIf="summary().raw_stock.length === 0">
-              <td colspan="7" class="empty">Sin materia prima.</td>
+              <td colspan="11" class="empty">Sin materia prima.</td>
             </tr>
           </tbody>
         </table>
@@ -143,4 +179,134 @@
       </table>
     </div>
   </article>
+
+  <section class="modal-backdrop" *ngIf="alertsOpen()">
+    <div class="alerts-modal">
+      <header>
+        <strong>Alertas de materia prima baja por bolsas</strong>
+        <button type="button" (click)="closeAlerts()">Cerrar</button>
+      </header>
+      <div class="alerts-list">
+        <label *ngFor="let item of summary().raw_stock">
+          <span>{{ item.producto }}</span>
+          <small>Stock: {{ fmtNumber(item.kg) }} kg | Bolsa {{ item.alerta_bolsa_kg | number:'1.0-0' }} kg</small>
+          <input type="number" min="0" step="0.01" [(ngModel)]="alertForm[item.product_id]" placeholder="Bolsas min.">
+          <input type="number" min="0" step="0.01" [(ngModel)]="orderQtyForm[item.product_id]" placeholder="Bolsas a pedir">
+          <input type="text" [(ngModel)]="whatsappForm[item.product_id]" placeholder="+595 981 232950">
+        </label>
+      </div>
+      <footer>
+        <button type="button" class="secondary-action" (click)="closeAlerts()">Cancelar</button>
+        <button type="button" class="primary-action inline" (click)="saveAlerts()" [disabled]="savingAlerts()">
+          {{ savingAlerts() ? 'Guardando...' : 'Guardar alertas' }}
+        </button>
+      </footer>
+    </div>
+  </section>
+
+  <section class="modal-backdrop" *ngIf="adjustmentsOpen()">
+    <div class="adjustments-modal">
+      <header>
+        <strong>Modificar inventario real</strong>
+        <button type="button" (click)="closeAdjustments()">Cerrar</button>
+      </header>
+      <div class="adjustment-reason">
+        <label>
+          <span>Motivo</span>
+          <input type="text" [(ngModel)]="adjustmentReason" placeholder="Ajuste semanal">
+        </label>
+      </div>
+      <div class="adjustments-grid">
+        <section>
+          <h2>Materia prima</h2>
+          <label *ngFor="let item of summary().raw_stock">
+            <span>{{ item.producto }}</span>
+            <small>Actual: {{ fmtNumber(item.kg) }} kg</small>
+            <input type="number" min="0" step="0.01" [(ngModel)]="rawAdjustmentForm[item.product_id]">
+          </label>
+        </section>
+        <section>
+          <h2>Paquetes</h2>
+          <label *ngFor="let item of summary().package_stock">
+            <span>{{ item.producto }} {{ item.gramaje }} g</span>
+            <small>Actual: {{ item.paquetes }} paquetes</small>
+            <input type="number" min="0" step="1" [(ngModel)]="packageAdjustmentForm[packageKey(item)]">
+          </label>
+        </section>
+      </div>
+      <footer>
+        <button type="button" class="secondary-action" (click)="closeAdjustments()">Cancelar</button>
+        <button type="button" class="primary-action inline" (click)="saveAdjustments()" [disabled]="savingAdjustments()">
+          {{ savingAdjustments() ? 'Guardando...' : 'Guardar inventario' }}
+        </button>
+      </footer>
+    </div>
+  </section>
+
+  <section class="modal-backdrop" *ngIf="suggestedOpen()">
+    <div class="suggested-modal">
+      <header>
+        <strong>Sugerido de compra experimental</strong>
+        <button type="button" (click)="closeSuggested()">Cerrar</button>
+      </header>
+      <div class="suggested-controls">
+        <label>
+          <span>Historial dias</span>
+          <input type="number" min="1" max="365" step="1" [(ngModel)]="suggestedWindowDays">
+        </label>
+        <label>
+          <span>Referencia dias</span>
+          <input type="number" min="1" max="365" step="1" [(ngModel)]="suggestedTargetDays">
+        </label>
+        <button type="button" class="primary-action inline" (click)="loadSuggested()" [disabled]="loadingSuggested()">
+          {{ loadingSuggested() ? 'Calculando...' : 'Calcular' }}
+        </button>
+      </div>
+      <div class="table-wrap suggested-table">
+        <table>
+          <thead>
+            <tr>
+              <th>Producto</th>
+              <th class="num">Stock kg</th>
+              <th class="num">Stock bolsas</th>
+              <th class="num">Objetivo bolsas</th>
+              <th class="num">Sugerido bolsas</th>
+              <th class="num">Sugerido kg</th>
+              <th class="num">Consumo/dia ref.</th>
+              <th class="num">Dias rest.</th>
+              <th class="num">Dias usados</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let row of suggestedRows" [ngClass]="suggestedUrgencyClass(row)">
+              <td>{{ row.producto }}</td>
+              <td class="num">{{ fmtNumber(row.stock_kg) }}</td>
+              <td class="num">{{ fmtNumber(currentBags(row)) }}</td>
+              <td class="num">
+                <input
+                  class="objective-input"
+                  type="number"
+                  min="0"
+                  step="1"
+                  [ngModel]="objectiveBags(row)"
+                  (ngModelChange)="updateObjectiveBags(row, $event)"
+                >
+              </td>
+              <td class="num"><strong>{{ suggestedBags(row) }}</strong></td>
+              <td class="num">{{ fmtNumber(suggestedKg(row)) }}</td>
+              <td class="num">{{ fmtNumber(row.consumo_diario) }}</td>
+              <td class="num">{{ daysLabel(row.dias_restantes) }}</td>
+              <td class="num">{{ row.dias_activos }}</td>
+            </tr>
+            <tr *ngIf="!loadingSuggested() && suggestedRows.length === 0">
+              <td colspan="9" class="empty">Sin datos para sugerir compra.</td>
+            </tr>
+            <tr *ngIf="loadingSuggested()">
+              <td colspan="9" class="empty">Calculando sugerido...</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
 </main>

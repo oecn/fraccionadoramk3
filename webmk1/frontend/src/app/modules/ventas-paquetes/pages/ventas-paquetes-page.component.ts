@@ -66,6 +66,11 @@ export class VentasPaquetesPageComponent implements OnInit {
   }
 
   registrar(): void {
+    this.invoice.invoice_no = this.formatInvoiceNo(this.invoice.invoice_no);
+    if (this.invoice.invoice_no && !this.isInvoiceNoComplete(this.invoice.invoice_no)) {
+      this.error.set('El nro. de factura debe tener formato 000-000-0000000.');
+      return;
+    }
     const items = this.invoiceItems();
     if (items.length === 0) {
       this.error.set('Cargue al menos una cantidad para vender.');
@@ -167,6 +172,24 @@ export class VentasPaquetesPageComponent implements OnInit {
   totalIva(): number {
     const tax = this.taxSummary();
     return tax.iva5 + tax.iva10;
+  }
+
+  onInvoiceNoInput(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    this.invoice.invoice_no = this.formatInvoiceNo(input.value);
+    input.value = this.invoice.invoice_no;
+  }
+
+  private formatInvoiceNo(value: string): string {
+    const digits = String(value || '').replace(/\D+/g, '').slice(0, 13);
+    const first = digits.slice(0, 3);
+    const second = digits.slice(3, 6);
+    const third = digits.slice(6, 13);
+    return [first, second, third].filter(Boolean).join('-');
+  }
+
+  private isInvoiceNoComplete(value: string): boolean {
+    return /^\d{3}-\d{3}-\d{7}$/.test(value || '');
   }
 
   sheetPreview() {

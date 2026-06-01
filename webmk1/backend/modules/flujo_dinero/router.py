@@ -17,6 +17,7 @@ def flujo_summary(
     year: int | None = Query(default=None),
     quarter: str = Query(default="Todos"),
     retencion_mode: bool = Query(default=False),
+    include_iva: bool = Query(default=True),
     from_date: str = Query(default=""),
     to_date: str = Query(default=""),
 ) -> FlujoSummary:
@@ -24,7 +25,7 @@ def flujo_summary(
         year=year,
         quarter=quarter,
         retencion_mode=retencion_mode,
+        include_iva=include_iva,
         from_date=from_date,
         to_date=to_date,
     )
-

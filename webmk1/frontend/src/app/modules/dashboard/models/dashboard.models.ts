@@ -35,6 +35,21 @@ export type PaymentRow = {
   sucursal: string;
 };
 
+export type PaymentInvoiceDetail = {
+  factura_id: number;
+  proveedor: string;
+  factura: string;
+  lote: string;
+  fecha_emision: string;
+  vencimiento: string;
+  dias_para_vencer: number | null;
+  kg_inicial: number;
+  kg_saldo: number;
+  costo_total_gs: number;
+  costo_kg_gs: number;
+  estado: string;
+};
+
 export type PaymentCheckOption = {
   cheque_no: string;
   chequera_id: string;

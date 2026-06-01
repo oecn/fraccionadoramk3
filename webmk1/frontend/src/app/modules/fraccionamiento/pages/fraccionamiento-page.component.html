@@ -197,6 +197,7 @@
             <th class="num">Kg consumidos</th>
             <th>Eq. bolsas</th>
             <th>Lote</th>
+            <th>Acciones</th>
           </tr>
         </thead>
         <tbody>
@@ -213,12 +214,72 @@
             <td class="num">{{ fmtKg(row.kg_consumidos) }}</td>
             <td>{{ row.bolsas_eq }}</td>
             <td>{{ row.lote }}</td>
+            <td class="actions-cell">
+              <button type="button" class="text-action" (click)="openEdit(row)">Editar</button>
+              <button type="button" class="danger-action" (click)="eliminar(row)">Eliminar</button>
+            </td>
           </tr>
           <tr *ngIf="s.history.length === 0">
-            <td colspan="8" class="empty">Sin registros para el filtro actual.</td>
+            <td colspan="9" class="empty">Sin registros para el filtro actual.</td>
           </tr>
         </tbody>
       </table>
     </div>
   </article>
+
+  <section class="modal-backdrop" *ngIf="editing() as edit">
+    <article class="edit-modal">
+      <header>
+        <div>
+          <span>Fraccionamiento #{{ edit.id }}</span>
+          <strong>{{ edit.producto }}</strong>
+        </div>
+        <button type="button" class="icon-close" (click)="closeEdit()" [disabled]="savingEdit()">Cerrar</button>
+      </header>
+
+      <div class="edit-summary">
+        <div>
+          <span>Actual</span>
+          <strong>{{ edit.paquetes }} x {{ edit.gramaje }} g</strong>
+        </div>
+        <div>
+          <span>Consumo</span>
+          <strong>{{ fmtKg(edit.kg_consumidos) }} kg</strong>
+        </div>
+        <div>
+          <span>Lote</span>
+          <strong>{{ edit.lote || '-' }}</strong>
+        </div>
+      </div>
+
+      <div class="edit-grid">
+        <label>
+          Gramaje
+          <select [(ngModel)]="editForm.gramaje">
+            <option *ngFor="let g of gramajesEditDisponibles()" [ngValue]="g">{{ g }} g</option>
+          </select>
+        </label>
+        <label>
+          Paquetes
+          <input type="number" min="1" [(ngModel)]="editForm.paquetes">
+        </label>
+        <label class="wide">
+          Lote
+          <select [(ngModel)]="editForm.lot_id">
+            <option [ngValue]="null">Sin lote</option>
+            <option *ngFor="let l of lotesEditDisponibles()" [ngValue]="l.id">
+              ID {{ l.id }} - {{ l.lote || 's/lote' }} - {{ fmtKg(l.kg_saldo) }} kg
+            </option>
+          </select>
+        </label>
+      </div>
+
+      <footer>
+        <button type="button" class="secondary-action" (click)="closeEdit()" [disabled]="savingEdit()">Cancelar</button>
+        <button type="button" class="primary-action modal-save" (click)="guardarEdit()" [disabled]="savingEdit()">
+          {{ savingEdit() ? 'Guardando...' : 'Guardar cambios' }}
+        </button>
+      </footer>
+    </article>
+  </section>
 </main>

@@ -130,6 +130,20 @@ class HistorialVentasRepository:
                 "SELECT COALESCE(SUM(costo_total_gs),0) AS v FROM raw_lots WHERE ts::date >= %s AND ts::date <= %s",
                 (d1, d2),
             )
+            table_row = cn.execute("SELECT to_regclass(%s) AS table_name", ("raw_lot_deletions",)).fetchone()
+            has_delete_audit = bool(table_row and table_row["table_name"])
+            compras_eliminadas = (
+                scalar(
+                    """
+                    SELECT COALESCE(SUM(costo_total_gs),0) AS v
+                    FROM raw_lot_deletions
+                    WHERE deleted_at::date >= %s AND deleted_at::date <= %s
+                    """,
+                    (d1, d2),
+                )
+                if has_delete_audit
+                else 0.0
+            )
             gastos_total = scalar(
                 "SELECT COALESCE(SUM(monto_gs),0) AS v FROM expenses WHERE ts::date >= %s AND ts::date <= %s",
                 (d1, d2),
@@ -172,10 +186,31 @@ class HistorialVentasRepository:
             except Exception:
                 pass
 
+            deleted_lots: list[str] = []
+            if has_delete_audit:
+                del_rows = cn.execute(
+                    """
+                    SELECT CAST(deleted_at AS TEXT) AS deleted_at, producto, lote, proveedor, factura,
+                           costo_total_gs, motivo
+                    FROM raw_lot_deletions
+                    WHERE deleted_at::date >= %s AND deleted_at::date <= %s
+                    ORDER BY deleted_at DESC
+                    LIMIT 20
+                    """,
+                    (d1, d2),
+                ).fetchall()
+                for r in del_rows:
+                    deleted_lots.append(
+                        f"{str(r['deleted_at'] or '')[:10]} | {r['producto'] or '-'}"
+                        f" | Lote {r['lote'] or '-'} | Factura {r['factura'] or '-'}"
+                        f" | Gs {_fmt_gs(r['costo_total_gs'])} | Motivo: {r['motivo'] or '-'}"
+                    )
+
         ventas_total = ventas_facturas + ventas_bolsas
-        margen_bruto = ventas_total - compras_total
+        compras_netas = compras_total - compras_eliminadas
+        margen_bruto = ventas_total - compras_netas
         margen_bruto_pct = (margen_bruto / ventas_total * 100.0) if ventas_total else 0.0
-        beneficio_operativo = ventas_total - compras_total - gastos_total
+        beneficio_operativo = ventas_total - compras_netas - gastos_total
         beneficio_pct = (beneficio_operativo / ventas_total * 100.0) if ventas_total else 0.0
 
         now_txt = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -192,6 +227,8 @@ class HistorialVentasRepository:
             f"Ventas bolsas (Gs)....................: {_fmt_gs(ventas_bolsas)}",
             f"VENTAS TOTALES (Gs)...................: {_fmt_gs(ventas_total)}",
             f"Compras MP del mes (Gs)...............: {_fmt_gs(compras_total)}",
+            f"Compras eliminadas auditadas (Gs).....: {_fmt_gs(compras_eliminadas)}",
+            f"Compras MP netas (Gs).................: {_fmt_gs(compras_netas)}",
             f"Gastos del mes (Gs)...................: {_fmt_gs(gastos_total)}",
             f"Margen bruto estimado (Gs)............: {_fmt_gs(margen_bruto)} ({margen_bruto_pct:.1f}%)",
             f"Beneficio operativo estimado (Gs).....: {_fmt_gs(beneficio_operativo)} ({beneficio_pct:.1f}%)",
@@ -214,6 +251,16 @@ class HistorialVentasRepository:
                     f" | Paq: {r.paquetes}"
                     f" | Total Gs: {_fmt_gs(r.total_gs)}"
                 )
+
+        lines += [
+            "",
+            "LOTES DE COMPRA ELIMINADOS EN EL PERIODO",
+            "-" * 78,
+        ]
+        if not deleted_lots:
+            lines.append("Sin eliminaciones de lotes auditadas.")
+        else:
+            lines.extend(deleted_lots)
 
         lines += [
             "",

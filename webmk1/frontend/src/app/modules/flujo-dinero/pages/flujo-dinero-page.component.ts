@@ -5,7 +5,7 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 
 import { FormsModule } from '@angular/forms';
 
-import { FlujoSummary } from '../models/flujo-dinero.models';
+import { FlujoQuarterRow, FlujoSummary } from '../models/flujo-dinero.models';
 import { FlujoDineroService } from '../flujo-dinero.service';
 import { fmtGs } from '../../../shared/formatters';
 import { todayIso } from '../../../shared/utils';
@@ -16,6 +16,12 @@ type ChartBar = {
   x: number;
   width: number;
   className: string;
+};
+
+type QuarterBand = FlujoQuarterRow & {
+  x: number;
+  width: number;
+  labelX: number;
 };
 
 @Component({
@@ -48,6 +54,7 @@ export class FlujoDineroPageComponent implements OnInit {
     year: new Date().getFullYear(),
     quarter: 'Todos',
     retencion_mode: false,
+    include_iva: true,
     from_date: `${new Date().getFullYear()}-01-01`,
     to_date: todayIso(),
   };
@@ -144,6 +151,28 @@ export class FlujoDineroPageComponent implements OnInit {
     return Math.abs(value || 0) >= 1_000_000;
   }
 
+  quarterBands(summary: FlujoSummary): QuarterBand[] {
+    return summary.quarter_rows
+      .map((quarter) => {
+        const start = summary.rows.findIndex((row) => row.month === quarter.start_month);
+        const end = summary.rows.findIndex((row) => row.month === quarter.end_month);
+        if (start < 0 || end < 0) return null;
+        const leftEdge = this.monthLeftEdge(start, summary.rows.length);
+        const rightEdge = this.monthRightEdge(end, summary.rows.length);
+        return {
+          ...quarter,
+          x: leftEdge,
+          width: Math.max(1, rightEdge - leftEdge),
+          labelX: leftEdge + (rightEdge - leftEdge) / 2,
+        };
+      })
+      .filter((band): band is QuarterBand => band != null);
+  }
+
+  quarterTone(row: FlujoQuarterRow): string {
+    return row.profitable ? 'ok' : 'danger';
+  }
+
   private chartRange(rows: FlujoSummary['rows'], mode: 'main' | 'acumulado'): { min: number; max: number } {
     const values =
       mode === 'acumulado'
@@ -158,5 +187,13 @@ export class FlujoDineroPageComponent implements OnInit {
   private groupWidth(total: number): number {
     const plotWidth = this.chart.width - this.chart.left - this.chart.right;
     return total <= 1 ? plotWidth : plotWidth / total;
+  }
+
+  private monthLeftEdge(index: number, total: number): number {
+    return Math.max(this.chart.left, this.chartX(index, total) - this.groupWidth(total) / 2);
+  }
+
+  private monthRightEdge(index: number, total: number): number {
+    return Math.min(this.chart.width - this.chart.right, this.chartX(index, total) + this.groupWidth(total) / 2);
   }
 }

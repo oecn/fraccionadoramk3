@@ -1,0 +1,136 @@
+.header-band {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+.filters-panel {
+  grid-template-columns: 180px 140px 180px auto;
+  margin-top: 16px;
+  padding: 14px;
+}
+
+.kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin: 16px 0;
+}
+
+.kpi-card {
+  display: grid;
+  gap: 5px;
+  padding: 15px;
+  border: 1px solid #d8e2ee;
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: 0 12px 26px rgba(31, 56, 91, 0.07);
+}
+
+.kpi-card span,
+.trend-row small {
+  color: #66758d;
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.kpi-card strong {
+  color: #12314a;
+  font-size: 24px;
+}
+
+.kpi-card small {
+  color: #66758d;
+  font-weight: 800;
+}
+
+.kpi-card.total {
+  border-color: #bbf7d0;
+}
+
+.kpi-card.m1 {
+  border-color: #bfdbfe;
+}
+
+.kpi-card.m2 {
+  border-color: #fecaca;
+}
+
+.content-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(360px, 0.85fr);
+  gap: 16px;
+}
+
+.table-wrap {
+  max-height: 620px;
+}
+
+.machine-pill {
+  display: inline-flex;
+  min-width: 86px;
+  justify-content: center;
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: #fee2e2;
+  color: #991b1b;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.machine-pill.m1 {
+  background: #dbeafe;
+  color: #1e3a8a;
+}
+
+.trend-list {
+  display: grid;
+  gap: 10px;
+}
+
+.trend-row {
+  display: grid;
+  grid-template-columns: 74px minmax(120px, 1fr) 90px;
+  align-items: center;
+  gap: 8px;
+}
+
+.trend-row span,
+.trend-row strong {
+  color: #12314a;
+  font-weight: 900;
+}
+
+.trend-row small {
+  grid-column: 2 / 4;
+}
+
+.bar-track {
+  height: 12px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #e8eef5;
+}
+
+.bar-track i {
+  display: block;
+  height: 100%;
+  min-width: 2px;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #2563eb, #b91c1c);
+}
+
+@media (max-width: 1000px) {
+  .header-band,
+  .filters-panel,
+  .kpi-grid,
+  .content-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .header-band {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}

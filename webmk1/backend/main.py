@@ -2,9 +2,12 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from routers import health
+from modules.analisis import router as analisis_router
 from modules.chequeras import router as chequeras_router
+from modules.cobros_facturas import router as cobros_facturas_router
 from modules.compra_materia_prima import router as compra_materia_prima_router
 from modules.dashboard import router as dashboard_router
+from modules.estadisticas import router as estadisticas_router
 from modules.flujo_dinero import router as flujo_dinero_router
 from modules.fraccionamiento import router as fraccionamiento_router
 from modules.gastos_egresos import router as gastos_egresos_router
@@ -12,6 +15,7 @@ from modules.historial_compras import router as historial_compras_router
 from modules.historial_ventas import router as historial_ventas_router
 from modules.inventario import router as inventario_router
 from modules.ordenes_compra import router as ordenes_compra_router
+from modules.produccion import router as produccion_router
 from modules.productos import router as productos_router
 from modules.reportes_ventas import router as reportes_ventas_router
 from modules.resumenes import router as resumenes_router
@@ -35,9 +39,12 @@ app.add_middleware(
 )
 
 app.include_router(health.router)
+app.include_router(analisis_router.router)
 app.include_router(chequeras_router.router)
+app.include_router(cobros_facturas_router.router)
 app.include_router(compra_materia_prima_router.router)
 app.include_router(dashboard_router.router)
+app.include_router(estadisticas_router.router)
 app.include_router(flujo_dinero_router.router)
 app.include_router(fraccionamiento_router.router)
 app.include_router(gastos_egresos_router.router)
@@ -45,6 +52,7 @@ app.include_router(historial_compras_router.router)
 app.include_router(historial_ventas_router.router)
 app.include_router(inventario_router.router)
 app.include_router(ordenes_compra_router.router)
+app.include_router(produccion_router.router)
 app.include_router(productos_router.router)
 app.include_router(reportes_ventas_router.router)
 app.include_router(resumenes_router.router)

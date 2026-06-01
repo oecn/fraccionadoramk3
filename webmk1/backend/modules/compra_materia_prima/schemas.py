@@ -90,3 +90,13 @@ class FacturaCompraImportResponse(BaseModel):
     skipped: int
     message: str
     lotes: list[LoteAbiertoRow]
+
+
+class LoteDeleteRequest(BaseModel):
+    motivo: str = Field(min_length=3)
+
+
+class LoteDeleteResponse(BaseModel):
+    deleted: bool
+    lot_id: int
+    message: str

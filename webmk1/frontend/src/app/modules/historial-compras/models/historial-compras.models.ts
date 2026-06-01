@@ -4,11 +4,15 @@ export type CompraRow = {
   factura: string;
   proveedor: string;
   costo_total_gs: number;
+  tipo: string;
+  motivo: string;
+  producto: string;
 };
 
 export type HistorialComprasSummary = {
   total_registros: number;
   total_gs: number;
+  total_eliminado_gs: number;
   rows: CompraRow[];
 };
 

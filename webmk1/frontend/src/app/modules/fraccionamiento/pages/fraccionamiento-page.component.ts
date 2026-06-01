@@ -10,6 +10,7 @@ import {
   FraccionamientoCreate,
   FraccionamientoOptions,
   FraccionamientoSummary,
+  FraccionamientoHistoryRow,
   PackageStockRow,
   ProductoItem,
 } from '../models/fraccionamiento.models';
@@ -38,8 +39,10 @@ export class FraccionamientoPageComponent implements OnInit {
   readonly preview = signal<ConsumoPreview | null>(null);
   readonly loading = signal<boolean>(false);
   readonly saving = signal<boolean>(false);
+  readonly savingEdit = signal<boolean>(false);
   readonly error = signal<string>('');
   readonly message = signal<string>('');
+  readonly editing = signal<FraccionamientoHistoryRow | null>(null);
   showOnlyPackageStock = true;
 
   form: FraccionamientoCreate = {
@@ -54,6 +57,12 @@ export class FraccionamientoPageComponent implements OnInit {
     product_id: null as number | null,
     desde: '',
     hasta: '',
+  };
+
+  editForm = {
+    gramaje: 0,
+    paquetes: 0,
+    lot_id: null as number | null,
   };
 
   ngOnInit(): void {
@@ -142,6 +151,77 @@ export class FraccionamientoPageComponent implements OnInit {
   lotesDisponibles() {
     const pid = this.form.product_id;
     return this.options().lotes.filter((l) => l.product_id === pid);
+  }
+
+  lotesEditDisponibles() {
+    const row = this.editing();
+    if (!row) return [];
+    return this.options().lotes.filter((l) => l.product_id === row.product_id);
+  }
+
+  gramajesEditDisponibles(): number[] {
+    const row = this.editing();
+    if (!row) return [];
+    const gramajes = this.options().productos.find((p) => p.id === row.product_id)?.gramajes || [];
+    return gramajes.includes(row.gramaje) ? gramajes : [row.gramaje, ...gramajes];
+  }
+
+  openEdit(row: FraccionamientoHistoryRow): void {
+    this.editing.set(row);
+    this.editForm = {
+      gramaje: row.gramaje,
+      paquetes: row.paquetes,
+      lot_id: row.lot_id,
+    };
+    this.error.set('');
+    this.message.set('');
+  }
+
+  closeEdit(): void {
+    if (!this.savingEdit()) {
+      this.editing.set(null);
+    }
+  }
+
+  guardarEdit(): void {
+    const row = this.editing();
+    if (!row) return;
+    if (!this.editForm.gramaje || this.editForm.paquetes <= 0) {
+      this.error.set('Ingrese gramaje y paquetes validos.');
+      return;
+    }
+    this.savingEdit.set(true);
+    this.error.set('');
+    this.message.set('');
+    this.service.actualizar(row.id, this.editForm).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
+      next: () => {
+        this.savingEdit.set(false);
+        this.editing.set(null);
+        this.message.set('Fraccionamiento actualizado.');
+        this.loadOptions();
+        this.refresh();
+      },
+      error: (err) => {
+        this.savingEdit.set(false);
+        this.error.set(httpErrorMessage(err, 'No se pudo actualizar el fraccionamiento'));
+      },
+    });
+  }
+
+  eliminar(row: FraccionamientoHistoryRow): void {
+    if (!window.confirm(`Eliminar fraccionamiento #${row.id}? Se revertiran paquetes, materia prima y lote.`)) {
+      return;
+    }
+    this.error.set('');
+    this.message.set('');
+    this.service.eliminar(row.id).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
+      next: (res) => {
+        this.message.set(res.message);
+        this.loadOptions();
+        this.refresh();
+      },
+      error: (err) => this.error.set(httpErrorMessage(err, 'No se pudo eliminar el fraccionamiento')),
+    });
   }
 
   packageStockRows(summary: FraccionamientoSummary): PackageStockRow[] {

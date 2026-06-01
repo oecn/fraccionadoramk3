@@ -181,6 +181,9 @@ def _bolsas_necesarias(desc: str, paquetes_requeridos: object, paquetes_disponib
 
 
 class OrdenesCompraRepository:
+    def _ensure_schema(self, cn) -> None:
+        cn.execute("ALTER TABLE orden_compra ADD COLUMN IF NOT EXISTS nota_remision TEXT NOT NULL DEFAULT ''")
+
     def _stock_cache(self) -> tuple[list[tuple[int, str]], dict[tuple[int, int], int]]:
         with connection("fraccionadora") as cn:
             product_rows = cn.execute("SELECT id, name FROM products;").fetchall()
@@ -249,6 +252,7 @@ class OrdenesCompraRepository:
     def list_imported(self) -> list[OrdenCompraRow]:
         products, stock = self._stock_cache()
         with connection("pedidos") as cn:
+            self._ensure_schema(cn)
             rows = cn.execute(
                 """
                 SELECT oc.id,
@@ -257,13 +261,14 @@ class OrdenesCompraRepository:
                        COALESCE(CAST(oc.fecha_pedido AS TEXT), '') AS fecha_pedido,
                        COALESCE(oc.monto_total, 0) AS monto_total,
                        COALESCE(oc.completada, 0) AS completada,
+                       COALESCE(oc.nota_remision, '') AS nota_remision,
                        COALESCE(CAST(oc.created_at AS TEXT), '') AS created_at,
                        COUNT(oi.id) AS items_count
                 FROM orden_compra oc
                 LEFT JOIN orden_item oi ON oi.oc_id = oc.id
-                GROUP BY oc.id, oc.nro_oc, oc.sucursal, oc.fecha_pedido, oc.monto_total, oc.completada, oc.created_at
+                GROUP BY oc.id, oc.nro_oc, oc.sucursal, oc.fecha_pedido, oc.monto_total, oc.completada, oc.nota_remision, oc.created_at
                 ORDER BY COALESCE(oc.completada, 0) ASC,
-                         oc.fecha_pedido ASC NULLS LAST,
+                         oc.fecha_pedido DESC NULLS LAST,
                          oc.created_at DESC NULLS LAST,
                          oc.id DESC
                 LIMIT 100
@@ -295,6 +300,7 @@ class OrdenesCompraRepository:
                 monto_total=float(r["monto_total"] or 0),
                 items_count=int(r["items_count"] or 0),
                 completada=bool(r["completada"]),
+                nota_remision=r["nota_remision"] or "",
                 created_at=r["created_at"] or "",
                 pct_listo_envio=pct_by_oc.get(int(r["id"]), 100.0),
             )
@@ -304,6 +310,7 @@ class OrdenesCompraRepository:
     def detail(self, oc_id: int) -> OrdenCompraDetail:
         products, stock = self._stock_cache()
         with connection("pedidos") as cn:
+            self._ensure_schema(cn)
             row = cn.execute(
                 """
                 SELECT oc.id,
@@ -312,12 +319,13 @@ class OrdenesCompraRepository:
                        COALESCE(CAST(oc.fecha_pedido AS TEXT), '') AS fecha_pedido,
                        COALESCE(oc.monto_total, 0) AS monto_total,
                        COALESCE(oc.completada, 0) AS completada,
+                       COALESCE(oc.nota_remision, '') AS nota_remision,
                        COALESCE(CAST(oc.created_at AS TEXT), '') AS created_at,
                        COUNT(oi.id) AS items_count
                 FROM orden_compra oc
                 LEFT JOIN orden_item oi ON oi.oc_id = oc.id
                 WHERE oc.id = %s
-                GROUP BY oc.id, oc.nro_oc, oc.sucursal, oc.fecha_pedido, oc.monto_total, oc.completada, oc.created_at
+                GROUP BY oc.id, oc.nro_oc, oc.sucursal, oc.fecha_pedido, oc.monto_total, oc.completada, oc.nota_remision, oc.created_at
                 """,
                 (oc_id,),
             ).fetchone()
@@ -373,6 +381,7 @@ class OrdenesCompraRepository:
             monto_total=float(row["monto_total"] or 0),
             items_count=int(row["items_count"] or 0),
             completada=bool(row["completada"]),
+            nota_remision=row["nota_remision"] or "",
             created_at=row["created_at"] or "",
             pct_listo_envio=pct_listo,
             items=items,
@@ -563,16 +572,27 @@ class OrdenesCompraRepository:
             message=f"OC {nro_oc} eliminada.",
         )
 
-    def set_status(self, oc_id: int, completada: bool) -> OrdenCompraStatusResponse:
+    def set_status(self, oc_id: int, completada: bool, nota_remision: str = "") -> OrdenCompraStatusResponse:
+        nota = (nota_remision or "").strip()
+        if completada and not nota:
+            raise ValueError("Ingrese el numero de nota de remision.")
         with connection("pedidos") as cn:
+            self._ensure_schema(cn)
             row = cn.execute("SELECT nro_oc FROM orden_compra WHERE id = %s", (oc_id,)).fetchone()
             if not row:
                 raise ValueError("OC no encontrada.")
 
             flag = 1 if completada else 0
-            cn.execute("UPDATE orden_compra SET completada = %s WHERE id = %s", (flag, oc_id))
+            if completada:
+                cn.execute(
+                    "UPDATE orden_compra SET completada = %s, nota_remision = %s WHERE id = %s",
+                    (flag, nota, oc_id),
+                )
+            else:
+                cn.execute("UPDATE orden_compra SET completada = %s WHERE id = %s", (flag, oc_id))
             cn.execute("UPDATE orden_item SET enviado = %s WHERE oc_id = %s", (flag, oc_id))
 
         nro_oc = row["nro_oc"] or f"ID {oc_id}"
         estado = "entregada" if completada else "pendiente"
-        return OrdenCompraStatusResponse(oc_id=oc_id, completada=completada, message=f"OC {nro_oc} marcada como {estado}.")
+        extra = f" Nota remision: {nota}." if completada else ""
+        return OrdenCompraStatusResponse(oc_id=oc_id, completada=completada, nota_remision=nota, message=f"OC {nro_oc} marcada como {estado}.{extra}")

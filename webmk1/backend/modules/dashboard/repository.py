@@ -15,6 +15,7 @@ from modules.dashboard.schemas import (
     PaymentCheckOption,
     PaymentCheckStatus,
     PaymentDetailRow,
+    PaymentInvoiceDetail,
     PaymentReceiptUpdateRequest,
     PaymentReceiptUpdateResponse,
     PaymentRegisterRequest,
@@ -80,6 +81,26 @@ class DashboardRepository:
                     collected INTEGER NOT NULL DEFAULT 0,
                     updated_ts TEXT
                 );
+                CREATE TABLE IF NOT EXISTS invoice_collections(
+                    id BIGSERIAL PRIMARY KEY,
+                    fecha_cobro DATE NOT NULL DEFAULT CURRENT_DATE,
+                    cheque_no TEXT NOT NULL,
+                    boleta_deposito TEXT NOT NULL,
+                    banco TEXT NOT NULL DEFAULT '',
+                    observacion TEXT NOT NULL DEFAULT '',
+                    total_gs NUMERIC NOT NULL DEFAULT 0,
+                    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+                );
+                CREATE TABLE IF NOT EXISTS invoice_collection_items(
+                    id BIGSERIAL PRIMARY KEY,
+                    collection_id BIGINT NOT NULL REFERENCES invoice_collections(id) ON DELETE CASCADE,
+                    invoice_id BIGINT NOT NULL REFERENCES sales_invoices(id) ON DELETE CASCADE,
+                    monto_gs NUMERIC NOT NULL,
+                    UNIQUE(collection_id, invoice_id)
+                );
+                CREATE INDEX IF NOT EXISTS idx_invoice_collection_items_invoice
+                    ON invoice_collection_items(invoice_id);
                 """
             )
 
@@ -466,6 +487,44 @@ class DashboardRepository:
             ).fetchall()
         return [PaymentDetailRow(**dict(r)) for r in rows]
 
+    def payment_invoice_detail(self, lot_id: int) -> PaymentInvoiceDetail:
+        with connection("fraccionadora") as cn:
+            row = cn.execute(
+                """
+                SELECT id, COALESCE(CAST(ts AS TEXT),'') AS ts,
+                       COALESCE(factura,'') AS factura,
+                       COALESCE(proveedor,'') AS proveedor,
+                       COALESCE(lote,'') AS lote,
+                       COALESCE(kg_inicial,0) AS kg_inicial,
+                       COALESCE(kg_saldo,0) AS kg_saldo,
+                       COALESCE(costo_total_gs,0) AS costo_total_gs,
+                       COALESCE(costo_kg_gs,0) AS costo_kg_gs
+                FROM raw_lots
+                WHERE id = %s
+                """,
+                (lot_id,),
+            ).fetchone()
+        if not row:
+            raise ValueError("Factura no encontrada.")
+        fecha = str(row["ts"] or "")[:10]
+        fecha_date = self._parse_iso(fecha)
+        due = fecha_date + timedelta(days=CREDIT_TERM_DAYS) if fecha_date else None
+        dias = (due - date.today()).days if due else None
+        return PaymentInvoiceDetail(
+            factura_id=self._safe_int(row["id"]),
+            proveedor=str(row["proveedor"] or ""),
+            factura=str(row["factura"] or ""),
+            lote=str(row["lote"] or ""),
+            fecha_emision=fecha,
+            vencimiento=due.isoformat() if due else "",
+            dias_para_vencer=dias,
+            kg_inicial=float(row["kg_inicial"] or 0),
+            kg_saldo=float(row["kg_saldo"] or 0),
+            costo_total_gs=float(row["costo_total_gs"] or 0),
+            costo_kg_gs=float(row["costo_kg_gs"] or 0),
+            estado="Vencido" if dias is not None and dias < 0 else "Pendiente",
+        )
+
     def update_payment_receipt(self, payload: PaymentReceiptUpdateRequest) -> PaymentReceiptUpdateResponse:
         detail_ids = [int(x) for x in payload.detail_ids if int(x or 0) > 0]
         recibo = str(payload.nro_recibo_dinero or "").strip()
@@ -557,8 +616,6 @@ class DashboardRepository:
                 WHERE COALESCE(oc.completada,0) = 0
                   AND (%s = '' OR UPPER(COALESCE(oc.sucursal,'')) = UPPER(%s))
                   AND (%s = '' OR COALESCE(oc.nro_oc,'') LIKE %s)
-                  AND (%s = '' OR oc.fecha_pedido::date >= CAST(NULLIF(%s, '') AS date))
-                  AND (%s = '' OR oc.fecha_pedido::date <= CAST(NULLIF(%s, '') AS date))
                 GROUP BY oc.id, oc.nro_oc, oc.sucursal, oc.fecha_pedido, oc.monto_total
                 HAVING COALESCE(SUM(CASE WHEN COALESCE(oi.enviado,0)=0 THEN oi.cantidad ELSE 0 END), 0) > 0
                 ORDER BY oc.fecha_pedido ASC NULLS LAST, oc.id DESC;
@@ -568,10 +625,6 @@ class DashboardRepository:
                     sucursal.strip(),
                     f"%{search.strip()}%" if search.strip() else "",
                     f"%{search.strip()}%" if search.strip() else "",
-                    from_date.strip(),
-                    from_date.strip(),
-                    to_date.strip(),
-                    to_date.strip(),
                 ),
             ).fetchall()
         today = date.today()
@@ -659,15 +712,18 @@ class DashboardRepository:
         with connection("fraccionadora") as cn:
             rows = cn.execute(
                 """
-                SELECT id, COALESCE(CAST(ts AS TEXT),'') AS ts, COALESCE(invoice_no,'') AS invoice_no,
-                       COALESCE(customer,'') AS customer, COALESCE(gravada5_gs,0) AS gravada5_gs,
-                       COALESCE(iva5_gs,0) AS iva5_gs, COALESCE(gravada10_gs,0) AS gravada10_gs,
-                       COALESCE(iva10_gs,0) AS iva10_gs, COALESCE(total_gs,0) AS total_gs
-                FROM sales_invoices
-                WHERE (%s = '' OR COALESCE(invoice_no,'') LIKE %s OR COALESCE(customer,'') LIKE %s)
-                  AND (%s = '' OR ts::date >= CAST(NULLIF(%s, '') AS date))
-                  AND (%s = '' OR ts::date <= CAST(NULLIF(%s, '') AS date))
-                ORDER BY ts DESC, id DESC;
+                SELECT si.id, COALESCE(CAST(si.ts AS TEXT),'') AS ts, COALESCE(si.invoice_no,'') AS invoice_no,
+                       COALESCE(si.customer,'') AS customer, COALESCE(si.gravada5_gs,0) AS gravada5_gs,
+                       COALESCE(si.iva5_gs,0) AS iva5_gs, COALESCE(si.gravada10_gs,0) AS gravada10_gs,
+                       COALESCE(si.iva10_gs,0) AS iva10_gs, COALESCE(si.total_gs,0) AS total_gs
+                FROM sales_invoices si
+                WHERE (%s = '' OR COALESCE(si.invoice_no,'') LIKE %s OR COALESCE(si.customer,'') LIKE %s)
+                  AND (%s = '' OR si.ts::date >= CAST(NULLIF(%s, '') AS date))
+                  AND (%s = '' OR si.ts::date <= CAST(NULLIF(%s, '') AS date))
+                  AND NOT EXISTS (
+                    SELECT 1 FROM invoice_collection_items ici WHERE ici.invoice_id = si.id
+                  )
+                ORDER BY si.ts DESC, si.id DESC;
                 """,
                 (like_search, like_search, like_search, from_date.strip(), from_date.strip(), to_date.strip(), to_date.strip()),
             ).fetchall()

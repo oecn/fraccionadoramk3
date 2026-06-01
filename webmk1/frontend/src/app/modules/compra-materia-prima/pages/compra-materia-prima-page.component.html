@@ -182,6 +182,7 @@
               <th>Factura</th>
               <th class="num">Saldo kg</th>
               <th class="num">Costo kg</th>
+              <th>Accion</th>
             </tr>
           </thead>
           <tbody>
@@ -196,13 +197,43 @@
               <td>{{ row.factura || '-' }}</td>
               <td class="num">{{ fmtKg(row.kg_saldo) }}</td>
               <td class="num">{{ fmtGs(row.costo_kg_gs) }}</td>
+              <td>
+                <button type="button" class="danger-action" (click)="openDeleteDialog(row)">Eliminar</button>
+              </td>
             </tr>
             <tr *ngIf="s.lotes_abiertos.length === 0">
-              <td colspan="6" class="empty">Sin lotes abiertos para el filtro actual.</td>
+              <td colspan="7" class="empty">Sin lotes abiertos para el filtro actual.</td>
             </tr>
           </tbody>
         </table>
       </div>
     </article>
   </section>
+
+  <div class="modal-backdrop" *ngIf="deleteDialogOpen()" (click)="closeDeleteDialog()">
+    <section class="modal" (click)="$event.stopPropagation()">
+      <header>
+        <div>
+          <span class="eyebrow">ELIMINAR LOTE</span>
+          <h2>Motivo de eliminacion</h2>
+          <p>El lote se quitara del stock y quedara auditado con fecha y motivo.</p>
+        </div>
+        <button type="button" aria-label="Cerrar" (click)="closeDeleteDialog()">X</button>
+      </header>
+      <div class="delete-summary" *ngIf="loteToDelete() as row">
+        <strong>{{ row.producto }} / {{ row.lote || 's/lote' }}</strong>
+        <span>Factura {{ row.factura || '-' }} / {{ fmtKg(row.kg_saldo) }} kg / {{ fmtGs(row.costo_total_gs) }} Gs</span>
+      </div>
+      <label class="delete-reason">
+        Por que se elimina este lote
+        <textarea rows="4" [(ngModel)]="deleteForm.motivo" placeholder="Ej: carga duplicada por PDF, factura equivocada, lote creado por error"></textarea>
+      </label>
+      <footer>
+        <button type="button" (click)="closeDeleteDialog()" [disabled]="deletingLote()">Cancelar</button>
+        <button type="button" class="danger-action" (click)="confirmDeleteLote()" [disabled]="deletingLote()">
+          {{ deletingLote() ? 'Eliminando...' : 'Eliminar lote' }}
+        </button>
+      </footer>
+    </section>
+  </div>
 </main>

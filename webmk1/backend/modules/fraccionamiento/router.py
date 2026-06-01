@@ -4,9 +4,11 @@ from modules.fraccionamiento.repository import FraccionamientoRepository
 from modules.fraccionamiento.schemas import (
     ConsumoPreview,
     FraccionamientoCreate,
+    FraccionamientoDeleteResponse,
     FraccionamientoHistoryRow,
     FraccionamientoOptions,
     FraccionamientoSummary,
+    FraccionamientoUpdate,
 )
 
 
@@ -38,3 +40,19 @@ def registrar(payload: FraccionamientoCreate) -> FraccionamientoHistoryRow:
         return FraccionamientoRepository().create(payload)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.put("/{frac_id}", response_model=FraccionamientoHistoryRow)
+def actualizar(frac_id: int, payload: FraccionamientoUpdate) -> FraccionamientoHistoryRow:
+    try:
+        return FraccionamientoRepository().update(frac_id, payload)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.delete("/{frac_id}", response_model=FraccionamientoDeleteResponse)
+def eliminar(frac_id: int) -> FraccionamientoDeleteResponse:
+    try:
+        return FraccionamientoRepository().delete(frac_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc

@@ -141,6 +141,92 @@ tbody tr.not-importable td {
   font-size: 18px;
 }
 
+.danger-action {
+  border-color: #fecaca;
+  background: #fef2f2;
+  color: #991b1b;
+}
+
+.danger-action:hover:not(:disabled) {
+  border-color: #dc2626;
+  background: #dc2626;
+  color: #ffffff;
+}
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(8, 22, 38, 0.42);
+}
+
+.modal {
+  width: min(640px, 100%);
+  overflow: hidden;
+  border: 1px solid #d8e2ee;
+  border-radius: 8px;
+  background: #ffffff;
+  box-shadow: 0 24px 70px rgba(8, 22, 38, 0.22);
+}
+
+.modal header {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 18px;
+  border-bottom: 1px solid #e6edf5;
+}
+
+.modal h2 {
+  margin: 0;
+  color: #071326;
+  font-size: 24px;
+}
+
+.modal header button {
+  width: 38px;
+  min-width: 38px;
+  padding: 0;
+}
+
+.delete-summary {
+  display: grid;
+  gap: 5px;
+  padding: 14px 18px;
+  border-bottom: 1px solid #e6edf5;
+  background: #f8fbfd;
+}
+
+.delete-summary span {
+  color: #66758d;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.delete-reason {
+  padding: 18px;
+}
+
+.delete-reason textarea {
+  min-width: 0;
+  width: 100%;
+  padding: 10px;
+  border: 1px solid #c8d5e4;
+  border-radius: 6px;
+  color: #071326;
+  resize: vertical;
+}
+
+.modal footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 14px 18px 18px;
+}
+
 @media (max-width: 900px) {
   .work-grid,
   .stock-grid,

@@ -11,6 +11,7 @@ import {
   CompraMateriaPrimaSummary,
   FacturaCompraImportRequest,
   FacturaCompraPreview,
+  LoteAbiertoRow,
 } from '../models/compra-materia-prima.models';
 import { CompraMateriaPrimaService } from '../compra-materia-prima.service';
 import { httpErrorMessage } from '../../../shared/http-error';
@@ -38,6 +39,9 @@ export class CompraMateriaPrimaPageComponent implements OnInit {
   readonly saving = signal<boolean>(false);
   readonly parsingFactura = signal<boolean>(false);
   readonly importingFactura = signal<boolean>(false);
+  readonly deletingLote = signal<boolean>(false);
+  readonly deleteDialogOpen = signal<boolean>(false);
+  readonly loteToDelete = signal<LoteAbiertoRow | null>(null);
   readonly error = signal<string>('');
   readonly message = signal<string>('');
   readonly facturaPreview = signal<FacturaCompraPreview | null>(null);
@@ -59,6 +63,9 @@ export class CompraMateriaPrimaPageComponent implements OnInit {
   };
 
   useCustomBagKg = false;
+  deleteForm = {
+    motivo: '',
+  };
 
   ngOnInit(): void {
     this.loadOptions();
@@ -218,5 +225,45 @@ export class CompraMateriaPrimaPageComponent implements OnInit {
   costoKg(): number {
     const kg = this.kgTotal();
     return kg > 0 ? Number(this.form.costo_total_gs || 0) / kg : 0;
+  }
+
+  openDeleteDialog(row: LoteAbiertoRow): void {
+    this.loteToDelete.set(row);
+    this.deleteForm.motivo = '';
+    this.error.set('');
+    this.deleteDialogOpen.set(true);
+  }
+
+  closeDeleteDialog(): void {
+    if (this.deletingLote()) return;
+    this.deleteDialogOpen.set(false);
+    this.loteToDelete.set(null);
+    this.deleteForm.motivo = '';
+  }
+
+  confirmDeleteLote(): void {
+    const row = this.loteToDelete();
+    const motivo = this.deleteForm.motivo.trim();
+    if (!row) return;
+    if (motivo.length < 3) {
+      this.error.set('Ingrese el motivo de eliminacion del lote.');
+      return;
+    }
+    this.deletingLote.set(true);
+    this.error.set('');
+    this.message.set('');
+    this.service.eliminarLote(row.id, { motivo }).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
+      next: (res) => {
+        this.deletingLote.set(false);
+        this.message.set(res.message);
+        this.closeDeleteDialog();
+        this.loadOptions();
+        this.refresh();
+      },
+      error: (err) => {
+        this.deletingLote.set(false);
+        this.error.set(httpErrorMessage(err, 'No se pudo eliminar el lote'));
+      },
+    });
   }
 }

@@ -44,9 +44,9 @@ export class OrdenesCompraService {
     return this.http.delete<OrdenCompraDeleteResponse>(`${this.baseUrl}/ordenes-compra/${ocId}`);
   }
 
-  cambiarEstado(ocId: number, completada: boolean): Observable<OrdenCompraStatusResponse> {
+  cambiarEstado(ocId: number, completada: boolean, notaRemision = ''): Observable<OrdenCompraStatusResponse> {
     return this.http.post<OrdenCompraStatusResponse>(
-      `${this.baseUrl}/ordenes-compra/${ocId}/status?completada=${completada}`,
+      `${this.baseUrl}/ordenes-compra/${ocId}/status?completada=${completada}&nota_remision=${encodeURIComponent(notaRemision)}`,
       {},
     );
   }

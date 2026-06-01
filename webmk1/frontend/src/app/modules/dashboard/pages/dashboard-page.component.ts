@@ -7,14 +7,18 @@ import { FormsModule } from '@angular/forms';
 
 import {
   DashboardSummary,
+  OrderRow,
   PaymentCheckOption,
   PaymentCheckStatus,
   PaymentDetailRow,
+  PaymentInvoiceDetail,
   PaymentRow,
 } from '../models/dashboard.models';
 import { DashboardService } from '../dashboard.service';
 import { fmtGs } from '../../../shared/formatters';
 import { dateOffset, todayIso } from '../../../shared/utils';
+import { CobrosFacturasService } from '../../cobros-facturas/cobros-facturas.service';
+import { CobroFacturaCreate, CobroFacturaRow } from '../../cobros-facturas/models/cobros-facturas.models';
 
 @Component({
   selector: 'app-dashboard-page',
@@ -25,8 +29,11 @@ import { dateOffset, todayIso } from '../../../shared/utils';
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class DashboardPageComponent implements OnInit {
+  private readonly whatsappBySucursalKey = 'ordenesCompraWhatsappBySucursal';
+  private readonly collectionWhatsappGroupUrl = 'https://chat.whatsapp.com/FNm13JeV6rY8FPMInrbs8N';
   private readonly destroyRef = inject(DestroyRef);
   private readonly dashboard = inject(DashboardService);
+  private readonly cobrosFacturas = inject(CobrosFacturasService);
   readonly fmtGs = fmtGs;
 
   readonly sucursales = signal<string[]>([]);
@@ -39,10 +46,19 @@ export class DashboardPageComponent implements OnInit {
   readonly paymentChecks = signal<PaymentCheckOption[]>([]);
   readonly checkStatus = signal<PaymentCheckStatus | null>(null);
   readonly selectedPayments = signal<Record<number, boolean>>({});
+  readonly paymentInvoiceDetail = signal<PaymentInvoiceDetail | null>(null);
+  readonly loadingPaymentInvoice = signal<boolean>(false);
   readonly paymentDialogOpen = signal<boolean>(false);
   readonly reviewPaymentsOpen = signal<boolean>(false);
   readonly paymentDetails = signal<PaymentDetailRow[]>([]);
   readonly selectedPaymentDetails = signal<Record<number, boolean>>({});
+  readonly invoiceCollections = signal<CobroFacturaRow[]>([]);
+  readonly invoiceCollectionsOpen = signal<boolean>(false);
+  readonly editingInvoiceCollection = signal<CobroFacturaRow | null>(null);
+  readonly selectedCollections = signal<Record<number, boolean>>({});
+  readonly collectionDialogOpen = signal<boolean>(false);
+  readonly savingCollection = signal<boolean>(false);
+  readonly savingCollectionEdit = signal<boolean>(false);
 
   filters = {
     sucursal: '',
@@ -67,6 +83,20 @@ export class DashboardPageComponent implements OnInit {
     nro_recibo_dinero: '',
   };
 
+  collectionForm = {
+    fecha_cobro: todayIso(),
+    cheque_no: '',
+    boleta_deposito: '',
+    banco: '',
+    observacion: '',
+  };
+
+  collectionEditForm = {
+    fecha_cobro: todayIso(),
+    cheque_no: '',
+    boleta_deposito: '',
+  };
+
   ngOnInit(): void {
     this.dashboard.getSucursales().pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: (items) => this.sucursales.set(items),
@@ -74,6 +104,7 @@ export class DashboardPageComponent implements OnInit {
     });
     this.refresh();
     this.loadPaymentChecks();
+    this.loadInvoiceCollections();
   }
 
   refresh(): void {
@@ -83,11 +114,180 @@ export class DashboardPageComponent implements OnInit {
       next: (data) => {
         this.data.set(data);
         this.selectedPayments.set({});
+        this.selectedCollections.set({});
         this.loading.set(false);
       },
       error: (err) => {
         this.loading.set(false);
         this.error.set(err?.error?.detail || 'No se pudo cargar el dashboard');
+      },
+    });
+    this.loadInvoiceCollections();
+  }
+
+  loadInvoiceCollections(): void {
+    this.cobrosFacturas.summary().pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
+      next: (summary) => this.invoiceCollections.set(summary.cobros),
+      error: () => this.invoiceCollections.set([]),
+    });
+  }
+
+  openInvoiceCollections(): void {
+    this.invoiceCollectionsOpen.set(true);
+    this.loadInvoiceCollections();
+  }
+
+  closeInvoiceCollections(): void {
+    this.invoiceCollectionsOpen.set(false);
+    this.editingInvoiceCollection.set(null);
+  }
+
+  openPaymentInvoice(row: PaymentRow): void {
+    this.loadingPaymentInvoice.set(true);
+    this.paymentInvoiceDetail.set(null);
+    this.error.set('');
+    this.dashboard.getPaymentInvoiceDetail(row.factura_id).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
+      next: (detail) => {
+        this.paymentInvoiceDetail.set(detail);
+        this.loadingPaymentInvoice.set(false);
+      },
+      error: (err) => {
+        this.loadingPaymentInvoice.set(false);
+        this.error.set(err?.error?.detail || 'No se pudo cargar la factura');
+      },
+    });
+  }
+
+  closePaymentInvoice(): void {
+    this.paymentInvoiceDetail.set(null);
+    this.loadingPaymentInvoice.set(false);
+  }
+
+  editInvoiceCollection(row: CobroFacturaRow): void {
+    this.editingInvoiceCollection.set(row);
+    this.collectionEditForm = {
+      fecha_cobro: row.fecha_cobro || todayIso(),
+      cheque_no: row.cheque_no || '',
+      boleta_deposito: row.boleta_deposito || '',
+    };
+  }
+
+  cancelInvoiceCollectionEdit(): void {
+    this.editingInvoiceCollection.set(null);
+  }
+
+  saveInvoiceCollectionEdit(): void {
+    const row = this.editingInvoiceCollection();
+    if (!row) return;
+    if (!this.collectionEditForm.cheque_no.trim()) {
+      this.error.set('Ingrese numero de cheque.');
+      return;
+    }
+    if (!this.collectionEditForm.boleta_deposito.trim()) {
+      this.error.set('Ingrese boleta de deposito.');
+      return;
+    }
+    this.savingCollectionEdit.set(true);
+    this.error.set('');
+    this.cobrosFacturas.update(row.id, {
+      fecha_cobro: this.collectionEditForm.fecha_cobro,
+      cheque_no: this.collectionEditForm.cheque_no,
+      boleta_deposito: this.collectionEditForm.boleta_deposito,
+      banco: row.banco || '',
+      observacion: row.observacion || '',
+      items: row.items.map((item) => ({
+        invoice_id: item.invoice_id,
+        monto_gs: Number(item.monto_gs || 0),
+      })),
+    }).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
+      next: () => {
+        this.savingCollectionEdit.set(false);
+        this.editingInvoiceCollection.set(null);
+        this.message.set('Cobro actualizado.');
+        this.loadInvoiceCollections();
+        this.refresh();
+      },
+      error: (err) => {
+        this.savingCollectionEdit.set(false);
+        this.error.set(err?.error?.detail || 'No se pudo actualizar el cobro');
+      },
+    });
+  }
+
+  toggleCollection(row: { invoice_id: number }, checked: boolean): void {
+    this.selectedCollections.update((current) => ({ ...current, [row.invoice_id]: checked }));
+  }
+
+  selectedCollectionRows() {
+    const selected = this.selectedCollections();
+    return (this.data()?.collections || []).filter((row) => selected[row.invoice_id]);
+  }
+
+  selectedCollectionTotal(): number {
+    return this.selectedCollectionRows().reduce((sum, row) => sum + Number(row.total_con_retencion || row.total_gs || 0), 0);
+  }
+
+  openCollectionDialog(): void {
+    if (this.selectedCollectionRows().length === 0) {
+      this.error.set('Seleccione una o mas facturas emitidas.');
+      return;
+    }
+    this.error.set('');
+    this.collectionDialogOpen.set(true);
+  }
+
+  closeCollectionDialog(): void {
+    if (!this.savingCollection()) {
+      this.collectionDialogOpen.set(false);
+    }
+  }
+
+  registerCollection(): void {
+    const rows = this.selectedCollectionRows();
+    if (rows.length === 0) {
+      this.error.set('Seleccione una o mas facturas emitidas.');
+      return;
+    }
+    if (!this.collectionForm.cheque_no.trim()) {
+      this.error.set('Ingrese numero de cheque.');
+      return;
+    }
+    if (!this.collectionForm.boleta_deposito.trim()) {
+      this.error.set('Ingrese boleta de deposito.');
+      return;
+    }
+    const whatsappMessage = this.collectionWhatsappMessage(rows);
+    const payload: CobroFacturaCreate = {
+      ...this.collectionForm,
+      banco: this.collectionBankName(),
+      items: rows.map((row) => ({
+        invoice_id: row.invoice_id,
+        monto_gs: Number(row.total_con_retencion || row.total_gs || 0),
+      })),
+    };
+    this.savingCollection.set(true);
+    this.error.set('');
+    this.message.set('');
+    this.cobrosFacturas.create(payload).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
+      next: () => {
+        this.savingCollection.set(false);
+        this.collectionDialogOpen.set(false);
+        this.copyTextToClipboard(whatsappMessage);
+        this.message.set(`Cobro registrado. Mensaje copiado para WhatsApp.`);
+        window.open(this.collectionWhatsappGroupUrl, '_blank', 'noopener');
+        this.collectionForm = {
+          fecha_cobro: todayIso(),
+          cheque_no: '',
+          boleta_deposito: '',
+          banco: '',
+          observacion: '',
+        };
+        this.selectedCollections.set({});
+        this.refresh();
+      },
+      error: (err) => {
+        this.savingCollection.set(false);
+        this.error.set(err?.error?.detail || 'No se pudo registrar el cobro');
       },
     });
   }
@@ -97,6 +297,25 @@ export class DashboardPageComponent implements OnInit {
       next: (checks) => this.paymentChecks.set(checks),
       error: () => this.paymentChecks.set([]),
     });
+  }
+
+  confirmDeliveryFromRow(row: OrderRow, event?: Event): void {
+    const phone = this.cleanPhone(this.getWhatsappBySucursal(row.sucursal));
+    if (!phone) {
+      event?.preventDefault();
+      this.error.set('Cargue el numero de WhatsApp de esta sucursal en Importar OC > Numeros para entrega.');
+      return;
+    }
+    if (this.savingOrder() === row.oc_id) {
+      event?.preventDefault();
+      return;
+    }
+    this.markOrderDelivered(row.oc_id);
+  }
+
+  deliveryWhatsappHref(row: OrderRow): string {
+    const phone = this.cleanPhone(this.getWhatsappBySucursal(row.sucursal));
+    return phone ? this.deliveryWhatsappUrl(row, phone) : '';
   }
 
   markOrderDelivered(ocId: number): void {
@@ -114,6 +333,82 @@ export class DashboardPageComponent implements OnInit {
         this.error.set(err?.error?.detail || 'No se pudo marcar el pedido como entregado');
       },
     });
+  }
+
+  private cleanPhone(value: string): string {
+    const digits = String(value || '').replace(/\D+/g, '');
+    return digits.startsWith('0') ? `595${digits.slice(1)}` : digits;
+  }
+
+  private sucursalKey(value: string): string {
+    return (value || 'SIN_SUCURSAL').trim().toUpperCase();
+  }
+
+  private readWhatsappMap(): Record<string, string> {
+    try {
+      const raw = JSON.parse(localStorage.getItem(this.whatsappBySucursalKey) || '{}') as Record<string, string | { principal?: string }>;
+      return Object.fromEntries(
+        Object.entries(raw).map(([key, value]) => [key, typeof value === 'string' ? value : value?.principal || '']),
+      );
+    } catch {
+      return {};
+    }
+  }
+
+  private getWhatsappBySucursal(sucursal: string): string {
+    return this.readWhatsappMap()[this.sucursalKey(sucursal)] || '';
+  }
+
+  private collectionWhatsappMessage(rows: ReturnType<DashboardPageComponent['selectedCollectionRows']>): string {
+    const saludo = new Date().getHours() < 12 ? 'Buen dia' : 'Buenas tardes';
+    const banco = this.collectionBankName();
+    const sucursales = Array.from(new Set(rows.map((row) => row.customer).filter(Boolean)));
+    const detalle = rows
+      .map((row) => {
+        const factura = row.invoice_no || `ID ${row.invoice_id}`;
+        const sucursal = row.customer || '-';
+        const monto = this.fmtGs(Number(row.total_con_retencion || row.total_gs || 0));
+        return `- Factura ${factura} / Sucursal ${sucursal} / Monto ${monto} Gs`;
+      })
+      .join('\n');
+    const text = [
+      `Mensaje automatico. ${saludo}. Avisamos que fue depositado el cheque Nro. ${this.collectionForm.cheque_no.trim()} (${banco}), boleta Nro. ${this.collectionForm.boleta_deposito.trim()}.`,
+      `Referencia: ${sucursales.length === 1 ? sucursales[0] : 'sucursales seleccionadas'}.`,
+      detalle,
+      `Total: ${this.fmtGs(this.selectedCollectionTotal())} Gs. Saludos.`,
+    ].join('\n');
+    return text;
+  }
+
+  private collectionBankName(): string {
+    return this.collectionForm.cheque_no.trim().length >= 8 ? 'Banco ATLAS' : 'Banco CONTINENTAL';
+  }
+
+  private copyTextToClipboard(text: string): void {
+    if (navigator.clipboard?.writeText) {
+      navigator.clipboard.writeText(text).catch(() => this.fallbackCopyText(text));
+      return;
+    }
+    this.fallbackCopyText(text);
+  }
+
+  private fallbackCopyText(text: string): void {
+    const textarea = document.createElement('textarea');
+    textarea.value = text;
+    textarea.style.position = 'fixed';
+    textarea.style.opacity = '0';
+    document.body.appendChild(textarea);
+    textarea.select();
+    document.execCommand('copy');
+    document.body.removeChild(textarea);
+  }
+
+  private deliveryWhatsappUrl(row: OrderRow, phone: string): string {
+    const oc = row.numero || String(row.oc_id);
+    const saludo = new Date().getHours() < 12 ? 'Buen dia' : 'Buenas tardes';
+    const destino = row.sucursal ? ` a ${row.sucursal}` : '';
+    const text = `${saludo}. El pedido correspondiente a la OC ${oc} ya fue despachado y se encuentra en camino${destino}.`;
+    return `https://wa.me/${phone}?text=${encodeURIComponent(text)}`;
   }
 
   togglePayment(row: PaymentRow, checked: boolean): void {

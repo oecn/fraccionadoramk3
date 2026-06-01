@@ -1,0 +1,111 @@
+<main class="layout">
+  <section class="header-band">
+    <div>
+      <span class="eyebrow">OPERACION</span>
+      <h1>Rendimiento de maquina</h1>
+      <p>Produccion por mes, separada entre Maquina 1 y Maquina 2 segun producto fraccionado.</p>
+    </div>
+    <div class="header-summary" *ngIf="data() as d">
+      <strong>{{ fmtNumber(d.total_unidades, 0) }} unid.</strong>
+      <span>{{ monthLabel(d.month) }} {{ d.year }}</span>
+    </div>
+  </section>
+
+  <p class="error" *ngIf="error()">{{ error() }}</p>
+
+  <section class="filters-panel">
+    <label>
+      Mes
+      <select [(ngModel)]="filters.month">
+        <option *ngFor="let month of months" [ngValue]="month.value">{{ month.label }}</option>
+      </select>
+    </label>
+    <label>
+      Ano
+      <select [(ngModel)]="filters.year">
+        <option *ngFor="let year of options().years" [ngValue]="year">{{ year }}</option>
+      </select>
+    </label>
+    <label>
+      Rango tendencia
+      <select [(ngModel)]="filters.rangeMonths">
+        <option [ngValue]="6">6 meses</option>
+        <option [ngValue]="12">12 meses</option>
+        <option [ngValue]="24">24 meses</option>
+      </select>
+    </label>
+    <button type="button" class="primary-action" (click)="load()" [disabled]="loading()">
+      {{ loading() ? 'Cargando...' : 'Refrescar' }}
+    </button>
+  </section>
+
+  <section class="kpi-grid" *ngIf="data() as d">
+    <article class="kpi-card total">
+      <span>Total mes</span>
+      <strong>{{ fmtNumber(d.total_unidades, 0) }}</strong>
+      <small>unidades</small>
+    </article>
+    <article class="kpi-card m1">
+      <span>Maquina 1</span>
+      <strong>{{ fmtNumber(d.maquina1_unidades, 0) }}</strong>
+      <small>Arroz y azucar</small>
+    </article>
+    <article class="kpi-card m2">
+      <span>Maquina 2</span>
+      <strong>{{ fmtNumber(d.maquina2_unidades, 0) }}</strong>
+      <small>Otros productos</small>
+    </article>
+    <article class="kpi-card">
+      <span>Kg fraccionados</span>
+      <strong>{{ fmtKg(d.total_kg) }}</strong>
+      <small>{{ fmtNumber(d.total_paquetes, 0) }} paquetes</small>
+    </article>
+  </section>
+
+  <section class="content-grid" *ngIf="data() as d">
+    <article class="panel">
+      <header>Produccion del mes</header>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Producto</th>
+              <th>Maquina</th>
+              <th class="num">Unidades</th>
+              <th class="num">Paquetes</th>
+              <th class="num">Kg</th>
+              <th class="num">Fracc.</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let row of d.rows">
+              <td>{{ row.producto }}</td>
+              <td><span class="machine-pill" [class.m1]="row.maquina === 'Maquina 1'">{{ row.maquina }}</span></td>
+              <td class="num">{{ fmtNumber(row.unidades, 0) }}</td>
+              <td class="num">{{ fmtNumber(row.paquetes, 0) }}</td>
+              <td class="num">{{ fmtKg(row.kg_consumidos) }}</td>
+              <td class="num">{{ fmtNumber(row.fraccionamientos, 0) }}</td>
+            </tr>
+            <tr *ngIf="d.rows.length === 0">
+              <td colspan="6" class="empty">Sin produccion en el periodo.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </article>
+
+    <article class="panel">
+      <header>Tendencia mensual</header>
+      <div class="trend-list">
+        <div class="trend-row" *ngFor="let row of trendNewestFirst(d)">
+          <span>{{ row.ym }}</span>
+          <div class="bar-track">
+            <i [style.width.%]="barWidth(row)"></i>
+          </div>
+          <strong>{{ fmtNumber(row.total_unidades, 0) }}</strong>
+          <small>M1 {{ fmtNumber(row.maquina1_unidades, 0) }} / M2 {{ fmtNumber(row.maquina2_unidades, 0) }}</small>
+        </div>
+      </div>
+    </article>
+  </section>
+</main>

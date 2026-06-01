@@ -36,6 +36,25 @@ export class GastosEgresosPageComponent implements OnInit {
   readonly checkStatus = signal<CheckStatus | null>(null);
   readonly ipsPreview = signal<IpsParseResult | null>(null);
   readonly rrhhPreview = signal<RrhhParseResult | null>(null);
+  readonly ipsFileName = signal<string>('');
+  readonly rrhhFileName = signal<string>('');
+  readonly months = [
+    { value: 1, label: 'Enero' },
+    { value: 2, label: 'Febrero' },
+    { value: 3, label: 'Marzo' },
+    { value: 4, label: 'Abril' },
+    { value: 5, label: 'Mayo' },
+    { value: 6, label: 'Junio' },
+    { value: 7, label: 'Julio' },
+    { value: 8, label: 'Agosto' },
+    { value: 9, label: 'Septiembre' },
+    { value: 10, label: 'Octubre' },
+    { value: 11, label: 'Noviembre' },
+    { value: 12, label: 'Diciembre' },
+  ];
+  readonly years = Array.from({ length: 7 }, (_, index) => new Date().getFullYear() - 3 + index);
+  selectedMonth = new Date().getMonth() + 1;
+  selectedYear = new Date().getFullYear();
 
   filters = {
     desde: dateOffset(-30),
@@ -58,6 +77,7 @@ export class GastosEgresosPageComponent implements OnInit {
   };
 
   ngOnInit(): void {
+    this.applyMonthYear(false);
     this.refresh();
   }
 
@@ -147,9 +167,20 @@ export class GastosEgresosPageComponent implements OnInit {
     return 'Referencia';
   }
 
+  applyMonthYear(refresh = false): void {
+    const month = Number(this.selectedMonth);
+    const year = Number(this.selectedYear);
+    const first = new Date(year, month - 1, 1);
+    const last = new Date(year, month, 0);
+    this.filters.desde = this.toIsoDate(first);
+    this.filters.hasta = this.toIsoDate(last);
+    if (refresh) this.refresh();
+  }
+
   parseIps(event: Event): void {
     const file = this.inputFile(event);
     if (!file) return;
+    this.ipsFileName.set(file.name);
     this.parsingIps.set(true);
     this.error.set('');
     this.message.set('');
@@ -190,6 +221,7 @@ export class GastosEgresosPageComponent implements OnInit {
   parseRrhh(event: Event): void {
     const file = this.inputFile(event);
     if (!file) return;
+    this.rrhhFileName.set(file.name);
     this.parsingRrhh.set(true);
     this.error.set('');
     this.message.set('');
@@ -230,5 +262,12 @@ export class GastosEgresosPageComponent implements OnInit {
   private inputFile(event: Event): File | null {
     const input = event.target as HTMLInputElement | null;
     return input?.files?.item(0) || null;
+  }
+
+  private toIsoDate(date: Date): string {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
   }
 }

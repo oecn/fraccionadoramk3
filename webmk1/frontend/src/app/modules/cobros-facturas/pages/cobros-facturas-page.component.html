@@ -1,0 +1,222 @@
+<main class="layout">
+  <section class="header-band">
+    <div>
+      <span class="eyebrow">TESORERIA</span>
+      <h1>Cobros de facturas</h1>
+      <p>Registro de cheques recibidos, boletas de deposito y facturas canceladas.</p>
+    </div>
+    <div class="header-summary">
+      <strong>{{ data().cobros.length }} cobros</strong>
+      <span>{{ data().pendientes.length }} facturas pendientes</span>
+      <input
+        type="text"
+        placeholder="WhatsApp modulo"
+        [ngModel]="defaultWhatsappPhone"
+        (ngModelChange)="setDefaultWhatsappPhone($event)"
+      >
+      <button
+        type="button"
+        class="whatsapp-action"
+        [class.disabled]="!whatsappAllUrl()"
+        (click)="openWhatsappAll()"
+      >
+        WhatsApp
+      </button>
+    </div>
+  </section>
+
+  <p class="error" *ngIf="error()">{{ error() }}</p>
+  <p class="message" *ngIf="message()">{{ message() }}</p>
+
+  <section class="panel">
+    <header>
+      Periodo de facturas pendientes
+      <button type="button" class="text-action" (click)="load()" [disabled]="loading()">Aplicar</button>
+    </header>
+    <div class="form-grid">
+      <label>
+        Desde
+        <input type="date" [(ngModel)]="filters.from_date">
+      </label>
+      <label>
+        Hasta
+        <input type="date" [(ngModel)]="filters.to_date">
+      </label>
+    </div>
+  </section>
+
+  <section class="form-panel panel">
+    <header>{{ editingId ? 'Modificar cobro #' + editingId : 'Registrar cobro' }}</header>
+    <div class="form-grid">
+      <label>
+        Fecha cobro
+        <input type="date" [(ngModel)]="form.fecha_cobro">
+      </label>
+      <label>
+        Nro cheque
+        <input type="text" [(ngModel)]="form.cheque_no" placeholder="Cheque">
+      </label>
+      <label>
+        Boleta deposito
+        <input type="text" [(ngModel)]="form.boleta_deposito" placeholder="Boleta">
+      </label>
+      <label>
+        Banco
+        <input type="text" [(ngModel)]="form.banco" placeholder="Banco emisor / destino">
+      </label>
+      <label class="wide">
+        Observacion
+        <input type="text" [(ngModel)]="form.observacion" placeholder="Opcional">
+      </label>
+      <label>
+        WhatsApp aviso
+        <input
+          type="text"
+          placeholder="+595..."
+          [ngModel]="confirmWhatsappPhone || whatsappNumberForSelectedItems()"
+          (ngModelChange)="updateConfirmWhatsappPhone($event)"
+        >
+      </label>
+    </div>
+
+    <div class="selected-box">
+      <header>
+        <span>Facturas incluidas</span>
+        <strong>{{ fmtGs(totalSeleccionado()) }} Gs</strong>
+      </header>
+      <div class="table-wrap compact">
+        <table>
+          <thead>
+            <tr>
+              <th>Factura</th>
+              <th>Cliente</th>
+              <th class="num">Total a cobrar</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let item of selectedItems">
+              <td>{{ item.invoice_no }}</td>
+              <td>{{ item.customer }}</td>
+              <td class="num">{{ fmtGs(item.monto_gs) }}</td>
+              <td class="num"><button type="button" class="danger-action" (click)="removeFactura(item.invoice_id)">Quitar</button></td>
+            </tr>
+            <tr *ngIf="selectedItems.length === 0">
+              <td colspan="4" class="empty">Seleccione facturas pendientes.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <footer>
+        <button type="button" class="text-action" (click)="resetForm()" *ngIf="editingId">Cancelar edicion</button>
+        <button type="button" class="primary-action" (click)="save()" [disabled]="saving()">
+          {{ saving() ? 'Guardando...' : (editingId ? 'Guardar cambios y abrir WhatsApp' : 'Registrar cobro y abrir WhatsApp') }}
+        </button>
+      </footer>
+    </div>
+  </section>
+
+  <section class="split">
+    <article class="panel">
+      <header>
+        Facturas pendientes
+        <span>{{ data().pendientes.length }} disponibles</span>
+      </header>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Fecha</th>
+              <th>Factura</th>
+              <th>Cliente</th>
+              <th class="num">Total c/retencion</th>
+              <th>WhatsApp</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let row of data().pendientes">
+              <td>{{ row.ts || '-' }}</td>
+              <td>{{ row.invoice_no || ('ID ' + row.invoice_id) }}</td>
+              <td>{{ row.customer || '-' }}</td>
+              <td class="num">{{ fmtGs(row.total_gs) }}</td>
+              <td>
+                <input
+                  type="text"
+                  placeholder="+595..."
+                  [ngModel]="whatsappNumberForCliente(row.customer)"
+                  (ngModelChange)="setWhatsappNumberForCliente(row.customer, $event)"
+                >
+                <a
+                  class="text-action"
+                  [href]="whatsappUrl(row)"
+                  target="_blank"
+                  rel="noopener"
+                  [class.disabled]="!whatsappUrl(row)"
+                  (click)="!whatsappUrl(row) && $event.preventDefault()"
+                >
+                  Consultar
+                </a>
+              </td>
+              <td class="num"><button type="button" class="text-action" (click)="addFactura(row)">Agregar</button></td>
+            </tr>
+            <tr *ngIf="!loading() && data().pendientes.length === 0">
+              <td colspan="6" class="empty">Sin facturas pendientes.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </article>
+
+    <article class="panel">
+      <header>
+        Cobros registrados
+        <button type="button" class="text-action" (click)="load()" [disabled]="loading()">Refrescar</button>
+      </header>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Fecha</th>
+              <th>Cheque</th>
+              <th>Boleta</th>
+              <th>Facturas</th>
+              <th class="num">Total</th>
+              <th>WhatsApp</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let row of data().cobros">
+              <td>{{ row.fecha_cobro }}</td>
+              <td>{{ row.cheque_no }}</td>
+              <td>{{ row.boleta_deposito }}</td>
+              <td>
+                <span *ngFor="let item of row.items; let last = last">
+                  {{ item.invoice_no || ('ID ' + item.invoice_id) }}{{ last ? '' : ', ' }}
+                </span>
+              </td>
+              <td class="num">{{ fmtGs(row.total_gs) }}</td>
+              <td>
+                <a
+                  class="text-action"
+                  [href]="whatsappDepositoUrl(row)"
+                  target="_blank"
+                  rel="noopener"
+                  [class.disabled]="!whatsappDepositoUrl(row)"
+                  (click)="!whatsappDepositoUrl(row) && $event.preventDefault()"
+                >
+                  Avisar deposito
+                </a>
+              </td>
+              <td class="num"><button type="button" class="status-action" (click)="editCobro(row)">Modificar</button></td>
+            </tr>
+            <tr *ngIf="!loading() && data().cobros.length === 0">
+              <td colspan="7" class="empty">Sin cobros registrados.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </article>
+  </section>
+</main>

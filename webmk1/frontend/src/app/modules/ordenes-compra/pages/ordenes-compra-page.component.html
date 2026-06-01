@@ -24,6 +24,7 @@
       <button type="button" class="primary-action inline" (click)="importar()" [disabled]="importing()">
         {{ importing() ? 'Importando...' : 'Parsear y guardar' }}
       </button>
+      <button type="button" class="delivery-action" (click)="openDeliveryNumbers()">Numeros para entrega</button>
     </div>
   </section>
 
@@ -74,19 +75,39 @@
             <strong>{{ fmtGs(detail.monto_total) }}</strong>
           </div>
           <div>
+            <span>Peso</span>
+            <strong>{{ fmtKg(totalPesoKg(detail)) }}</strong>
+          </div>
+          <div>
             <span>Estado</span>
             <strong>{{ detail.completada ? 'Entregada' : 'Pendiente' }}</strong>
+          </div>
+          <div>
+            <span>Nota remision</span>
+            <strong>{{ detail.nota_remision || '-' }}</strong>
           </div>
           <div [ngClass]="'pct-' + percentTone(detail.pct_listo_envio)">
             <span>Listo</span>
             <strong>{{ detail.pct_listo_envio | number:'1.0-1' }}%</strong>
           </div>
-          <button type="button" class="status-action" (click)="toggleEstado(detail)" [disabled]="savingStatus() === detail.oc_id">
-            {{ savingStatus() === detail.oc_id ? 'Guardando...' : (detail.completada ? 'Marcar pendiente' : 'Marcar entregada') }}
-          </button>
-          <button type="button" class="danger-action" (click)="eliminar(detail)" [disabled]="deleting() === detail.oc_id">
-            {{ deleting() === detail.oc_id ? 'Eliminando...' : 'Eliminar OC' }}
-          </button>
+          <div class="detail-actions">
+            <button type="button" class="text-action" (click)="mostrarPedidoTxt(detail)">
+              Ver pedido TXT
+            </button>
+            <button
+              type="button"
+              class="group-whatsapp-action"
+              (click)="openProductionGroup(detail)"
+            >
+              Enviar a PRODUCCION GRANOS CENTRAL
+            </button>
+            <button type="button" class="status-action" (click)="toggleEstado(detail)" [disabled]="savingStatus() === detail.oc_id">
+              {{ savingStatus() === detail.oc_id ? 'Guardando...' : (detail.completada ? 'Marcar pendiente' : 'Marcar entregada') }}
+            </button>
+            <button type="button" class="danger-action" (click)="eliminar(detail)" [disabled]="deleting() === detail.oc_id">
+              {{ deleting() === detail.oc_id ? 'Eliminando...' : 'Eliminar OC' }}
+            </button>
+          </div>
         </div>
 
         <div class="table-wrap">
@@ -96,6 +117,7 @@
                 <th class="num">Linea</th>
                 <th>Descripcion</th>
                 <th class="num">Cantidad</th>
+                <th class="num">Peso</th>
                 <th class="num">En stock</th>
                 <th>Unidad</th>
               </tr>
@@ -103,17 +125,17 @@
             <tbody>
               <tr
                 *ngFor="let item of detail.items"
-                [class.stock-ok]="!detail.completada && item.stock_ok"
-                [class.stock-low]="!detail.completada && !item.stock_ok"
+                [ngClass]="!detail.completada ? stockTone(item) : ''"
               >
                 <td class="num">{{ item.linea }}</td>
                 <td>{{ item.descripcion }}</td>
                 <td class="num">{{ item.cantidad ?? '-' }}</td>
+                <td class="num">{{ itemPesoKg(item) ? fmtKg(itemPesoKg(item)) : '-' }}</td>
                 <td class="num">{{ stockLabel(item.stock_disponible) }}</td>
                 <td>{{ item.unidad || '-' }}</td>
               </tr>
               <tr *ngIf="detail.items.length === 0">
-                <td colspan="5" class="empty">Sin items.</td>
+                <td colspan="6" class="empty">Sin items.</td>
               </tr>
             </tbody>
           </table>
@@ -209,7 +231,7 @@
             </tr>
           </thead>
           <tbody>
-            <tr *ngFor="let row of p.rows" [class.stock-ok]="row.stock_ok" [class.stock-low]="!row.stock_ok">
+            <tr *ngFor="let row of p.rows" [ngClass]="pendingStockTone(row)">
               <td>{{ row.descripcion }}</td>
               <td>{{ row.producto_match || '-' }}</td>
               <td class="num">{{ row.necesario }}</td>
@@ -225,5 +247,92 @@
     <ng-template #loadingPending>
       <div class="empty detail-empty">{{ loadingPendientes() ? 'Cargando...' : 'Sin datos.' }}</div>
     </ng-template>
+  </section>
+
+  <section class="modal-backdrop" *ngIf="pedidoTxt()">
+    <div class="txt-modal">
+      <header>
+        <strong>Pedido TXT</strong>
+        <button type="button" (click)="cerrarPedidoTxt()">Cerrar</button>
+      </header>
+      <textarea readonly [value]="pedidoTxt()"></textarea>
+      <footer>
+        <button type="button" class="text-action" (click)="copiarPedidoTxt()">Copiar al portapapeles</button>
+      </footer>
+    </div>
+  </section>
+
+  <section class="modal-backdrop" *ngIf="showingDeliveryNumbers()">
+    <div class="delivery-modal">
+      <header>
+        <strong>Numeros para entrega</strong>
+        <button type="button" (click)="closeDeliveryNumbers()">Cerrar</button>
+      </header>
+      <div class="delivery-numbers" *ngIf="sucursalesEntrega().length > 0; else noSucursalesModal">
+        <label *ngFor="let sucursal of sucursalesEntrega()">
+          <span>{{ sucursal }}</span>
+          <input
+            type="tel"
+            inputmode="tel"
+            placeholder="+595 981 232950"
+            [ngModel]="whatsappNumberForSucursal(sucursal)"
+            (ngModelChange)="updateWhatsappSucursal(sucursal, $event)"
+          >
+        </label>
+      </div>
+      <ng-template #noSucursalesModal>
+        <div class="empty detail-empty">Importe una OC para cargar numeros por sucursal.</div>
+      </ng-template>
+      <footer>
+        <button type="button" class="status-action" (click)="closeDeliveryNumbers()">Listo</button>
+      </footer>
+    </div>
+  </section>
+
+  <section class="modal-backdrop" *ngIf="whatsappTarget() as target">
+    <div class="whatsapp-modal">
+      <header>
+        <strong>Enviar aviso por WhatsApp</strong>
+        <button type="button" (click)="closeWhatsappPrompt()">Cerrar</button>
+      </header>
+      <div class="whatsapp-body">
+        <label>
+          <span>Nota de remision</span>
+          <input
+            type="text"
+            placeholder="Numero de nota"
+            [ngModel]="notaRemision()"
+            (ngModelChange)="notaRemision.set($event)"
+          >
+        </label>
+        <label>
+          <span>Numero para {{ target.sucursal || 'esta sucursal' }}</span>
+          <input
+            type="tel"
+            inputmode="tel"
+            placeholder="+595 981 232950"
+            [ngModel]="whatsappPhone()"
+            (ngModelChange)="whatsappPhone.set($event)"
+            (keydown.enter)="confirmEntregaWhatsapp()"
+            autofocus
+          >
+        </label>
+        <small>La nota queda guardada en la OC. El numero se guarda para proximas OC de esta sucursal.</small>
+        <p>Mensaje: Aviso automatico - Granos Central. - Informamos que el pedido correspondiente a la OC {{ target.nro_oc || target.oc_id }} ya fue despachado y se encuentra en camino a {{ target.sucursal || 'la sucursal' }}. - Nota de remision: {{ notaRemision() || '-' }}. Agradecemos la confianza y esperamos atenderles nuevamente pronto. Muchas gracias.</p>
+      </div>
+      <footer>
+        <button type="button" class="text-action" (click)="closeWhatsappPrompt()">Cancelar</button>
+        <a
+          class="status-action"
+          [href]="whatsappHrefForTarget(target)"
+          target="_blank"
+          rel="noopener"
+          [class.disabled]="savingStatus() === target.oc_id"
+          (click)="confirmEntregaWhatsapp($event)"
+        >
+          {{ savingStatus() === target.oc_id ? 'Guardando...' : 'Marcar y abrir WhatsApp' }}
+        </a>
+      </footer>
+    </div>
   </section>
 </main>

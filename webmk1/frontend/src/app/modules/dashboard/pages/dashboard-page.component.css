@@ -152,6 +152,31 @@ select {
   font-size: 18px;
 }
 
+.link-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 16px;
+  border: 1px solid var(--gc-teal);
+  border-radius: 8px;
+  background: var(--gc-teal);
+  color: #ffffff;
+  font-weight: 900;
+  text-decoration: none;
+}
+
+.link-action.disabled {
+  cursor: progress;
+  opacity: 0.7;
+}
+
+.link-action.compact {
+  min-height: 30px;
+  padding: 0 10px;
+  border-radius: 7px;
+  font-size: 12px;
+}
+
 input:focus,
 select:focus {
   border-color: var(--gc-blue);
@@ -286,6 +311,10 @@ select:focus {
   font-size: 14px;
 }
 
+.edit-collection {
+  border-top: 1px solid #e7edf5;
+}
+
 .check-status {
   grid-column: 1 / -1;
   margin: 0;
@@ -378,6 +407,37 @@ td input[type="checkbox"] {
   font-weight: 900;
 }
 
+.invoice-detail {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  padding: 16px;
+}
+
+.invoice-detail div {
+  display: grid;
+  gap: 4px;
+  padding: 11px 12px;
+  border: 1px solid #e7edf5;
+  border-radius: 8px;
+  background: #fbfcfe;
+}
+
+.invoice-detail span {
+  color: #66758d;
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.invoice-detail strong {
+  color: #061326;
+  font-size: 15px;
+}
+
+.invoice-loading {
+  padding: 18px 16px;
+}
+
 .table-wrap.mini {
   max-height: 160px;
   margin: 0 16px 12px;
@@ -417,6 +477,23 @@ td input[type="checkbox"] {
 
 .collections .table-wrap {
   max-height: 300px;
+}
+
+.collection-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 12px;
+  border-top: 1px solid #e7edf5;
+  background: #fbfcfe;
+}
+
+.collection-actions span {
+  margin-right: auto;
+  color: #53677f;
+  font-size: 13px;
+  font-weight: 900;
 }
 
 table {

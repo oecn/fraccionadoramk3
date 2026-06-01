@@ -16,6 +16,8 @@ from modules.compra_materia_prima.schemas import (
     FacturaCompraImportResponse,
     FacturaCompraItem,
     FacturaCompraPreview,
+    LoteDeleteRequest,
+    LoteDeleteResponse,
     CompraMateriaPrimaOptions,
     CompraMateriaPrimaSummary,
     LoteAbiertoRow,
@@ -55,6 +57,33 @@ def _bolsas_equivalentes(kg: float | None, bolsa_kg: float) -> int:
 
 
 class CompraMateriaPrimaRepository:
+    def _ensure_delete_audit(self, cn) -> None:
+        cn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS raw_lot_deletions(
+                id BIGSERIAL PRIMARY KEY,
+                lot_id INTEGER NOT NULL,
+                product_id INTEGER NOT NULL,
+                producto TEXT NOT NULL DEFAULT '',
+                lote TEXT NOT NULL DEFAULT '',
+                proveedor TEXT NOT NULL DEFAULT '',
+                factura TEXT NOT NULL DEFAULT '',
+                kg_inicial REAL NOT NULL DEFAULT 0,
+                kg_saldo REAL NOT NULL DEFAULT 0,
+                costo_total_gs REAL NOT NULL DEFAULT 0,
+                costo_kg_gs REAL NOT NULL DEFAULT 0,
+                lot_ts TEXT NOT NULL DEFAULT '',
+                motivo TEXT NOT NULL,
+                deleted_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )
+            """
+        )
+        cn.execute("CREATE INDEX IF NOT EXISTS idx_raw_lot_deletions_deleted_at ON raw_lot_deletions(deleted_at)")
+
+    def _table_exists(self, cn, table_name: str) -> bool:
+        row = cn.execute("SELECT to_regclass(%s) AS table_name", (table_name,)).fetchone()
+        return bool(row and row["table_name"])
+
     def _product_map(self) -> dict[str, tuple[int, str]]:
         with connection("fraccionadora") as cn:
             rows = cn.execute("SELECT id, name FROM products ORDER BY name").fetchall()
@@ -335,3 +364,79 @@ class CompraMateriaPrimaRepository:
             lotes=lotes,
             message=f"Factura {factura or '-'}: {inserted} lote(s) cargado(s), {skipped} omitido(s).",
         )
+
+    def delete_lote(self, lot_id: int, payload: LoteDeleteRequest) -> LoteDeleteResponse:
+        motivo = (payload.motivo or "").strip()
+        if len(motivo) < 3:
+            raise ValueError("Ingrese el motivo de eliminacion del lote.")
+
+        with connection("fraccionadora") as cn:
+            self._ensure_delete_audit(cn)
+            lot = cn.execute(
+                """
+                SELECT rl.id, rl.product_id, p.name AS producto,
+                       COALESCE(rl.lote, '') AS lote,
+                       COALESCE(rl.proveedor, '') AS proveedor,
+                       COALESCE(rl.factura, '') AS factura,
+                       COALESCE(rl.kg_inicial, 0) AS kg_inicial,
+                       COALESCE(rl.kg_saldo, 0) AS kg_saldo,
+                       COALESCE(rl.costo_total_gs, 0) AS costo_total_gs,
+                       COALESCE(rl.costo_kg_gs, 0) AS costo_kg_gs,
+                       CAST(rl.ts AS TEXT) AS lot_ts
+                FROM raw_lots rl
+                JOIN products p ON p.id = rl.product_id
+                WHERE rl.id = %s
+                """,
+                (int(lot_id),),
+            ).fetchone()
+            if not lot:
+                raise ValueError("Lote no encontrado.")
+
+            used = cn.execute("SELECT 1 FROM lot_fractionations WHERE lot_id = %s LIMIT 1", (int(lot_id),)).fetchone()
+            merma = cn.execute("SELECT 1 FROM lot_mermas WHERE lot_id = %s LIMIT 1", (int(lot_id),)).fetchone()
+            if used or merma:
+                raise ValueError("No se puede eliminar un lote con fraccionamientos o merma. Cierre o ajuste el lote en Resumenes.")
+
+            kg_inicial = float(lot["kg_inicial"] or 0)
+            kg_saldo = float(lot["kg_saldo"] or 0)
+            if abs(kg_inicial - kg_saldo) > 1e-6:
+                raise ValueError("No se puede eliminar un lote parcialmente consumido.")
+
+            cn.execute(
+                """
+                INSERT INTO raw_lot_deletions(
+                    lot_id, product_id, producto, lote, proveedor, factura,
+                    kg_inicial, kg_saldo, costo_total_gs, costo_kg_gs, lot_ts, motivo, deleted_at
+                )
+                VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,CURRENT_TIMESTAMP)
+                """,
+                (
+                    int(lot["id"]),
+                    int(lot["product_id"]),
+                    str(lot["producto"] or ""),
+                    str(lot["lote"] or ""),
+                    str(lot["proveedor"] or ""),
+                    str(lot["factura"] or ""),
+                    kg_inicial,
+                    kg_saldo,
+                    float(lot["costo_total_gs"] or 0),
+                    float(lot["costo_kg_gs"] or 0),
+                    str(lot["lot_ts"] or ""),
+                    motivo,
+                ),
+            )
+            cn.execute(
+                """
+                UPDATE raw_stock
+                   SET kg = GREATEST(COALESCE(kg, 0) - %s, 0)
+                 WHERE product_id = %s
+                """,
+                (kg_saldo, int(lot["product_id"])),
+            )
+            if self._table_exists(cn, "dashboard_payment_flags"):
+                cn.execute("DELETE FROM dashboard_payment_flags WHERE lot_id = %s", (int(lot_id),))
+            if self._table_exists(cn, "dashboard_payment_details"):
+                cn.execute("DELETE FROM dashboard_payment_details WHERE lot_id = %s", (int(lot_id),))
+            cn.execute("DELETE FROM raw_lots WHERE id = %s", (int(lot_id),))
+
+        return LoteDeleteResponse(deleted=True, lot_id=int(lot_id), message="Lote eliminado y auditado.")

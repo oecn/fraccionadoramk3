@@ -38,6 +38,21 @@ class PaymentRow(BaseModel):
     sucursal: str
 
 
+class PaymentInvoiceDetail(BaseModel):
+    factura_id: int
+    proveedor: str
+    factura: str
+    lote: str
+    fecha_emision: str
+    vencimiento: str
+    dias_para_vencer: int | None
+    kg_inicial: float
+    kg_saldo: float
+    costo_total_gs: float
+    costo_kg_gs: float
+    estado: str
+
+
 class PaymentCheckOption(BaseModel):
     cheque_no: str
     chequera_id: str

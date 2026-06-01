@@ -30,6 +30,7 @@ class OrdenCompraRow(BaseModel):
     monto_total: float
     items_count: int
     completada: bool
+    nota_remision: str = ""
     created_at: str
     pct_listo_envio: float
 
@@ -47,6 +48,7 @@ class OrdenCompraDeleteResponse(BaseModel):
 class OrdenCompraStatusResponse(BaseModel):
     oc_id: int
     completada: bool
+    nota_remision: str = ""
     message: str
 
 

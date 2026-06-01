@@ -80,9 +80,23 @@
     <header>Importar gastos</header>
     <div class="import-grid">
       <article class="import-box">
-        <div>
-          <h3>IPS PDF</h3>
+        <div class="import-head">
+          <div>
+            <h3>IPS PDF</h3>
+            <span>Extracto de aporte patronal</span>
+          </div>
+          <span class="file-type">PDF</span>
+        </div>
+        <label class="upload-zone" [class.busy]="parsingIps() || importingIps()">
           <input type="file" accept="application/pdf,.pdf" (change)="parseIps($event)" [disabled]="parsingIps() || importingIps()">
+          <span class="upload-icon">PDF</span>
+          <strong>{{ parsingIps() ? 'Parseando IPS...' : 'Seleccionar PDF' }}</strong>
+          <small>{{ ipsFileName() || 'Arrastre o seleccione el extracto IPS' }}</small>
+        </label>
+        <div class="import-state" *ngIf="ipsPreview() as ips">
+          <span [class.ok]="!ips.duplicate" [class.warn]="ips.duplicate">
+            {{ ips.duplicate ? 'Ya cargado' : 'Listo para importar' }}
+          </span>
         </div>
         <div *ngIf="ipsPreview() as ips" class="preview-box" [class.warning]="ips.duplicate">
           <div><span>Periodo</span><strong>{{ ips.periodo_display || ips.periodo }}</strong></div>
@@ -97,9 +111,23 @@
       </article>
 
       <article class="import-box">
-        <div>
-          <h3>Adelantos / salarios TXT</h3>
+        <div class="import-head">
+          <div>
+            <h3>Adelantos / salarios TXT</h3>
+            <span>Movimientos de funcionarios</span>
+          </div>
+          <span class="file-type">TXT</span>
+        </div>
+        <label class="upload-zone" [class.busy]="parsingRrhh() || importingRrhh()">
           <input type="file" accept=".txt,.csv,text/plain" (change)="parseRrhh($event)" [disabled]="parsingRrhh() || importingRrhh()">
+          <span class="upload-icon">TXT</span>
+          <strong>{{ parsingRrhh() ? 'Parseando archivo...' : 'Seleccionar TXT' }}</strong>
+          <small>{{ rrhhFileName() || 'Formato: CI, cuenta, concepto, monto, confirmado' }}</small>
+        </label>
+        <div class="import-state" *ngIf="rrhhPreview() as rrhh">
+          <span [class.ok]="rrhh.unresolved_count === 0" [class.warn]="rrhh.unresolved_count > 0">
+            {{ rrhh.unresolved_count > 0 ? 'Revisar funcionarios' : 'Listo para importar' }}
+          </span>
         </div>
         <div *ngIf="rrhhPreview() as rrhh" class="preview-box" [class.warning]="rrhh.unresolved_count > 0">
           <div><span>Archivo</span><strong>{{ rrhh.file_name }}</strong></div>
@@ -132,6 +160,18 @@
   <section class="panel">
     <header>Historial de gastos</header>
     <section class="filters-panel">
+      <label>
+        Mes
+        <select [(ngModel)]="selectedMonth" (change)="applyMonthYear()">
+          <option *ngFor="let month of months" [ngValue]="month.value">{{ month.label }}</option>
+        </select>
+      </label>
+      <label>
+        Año
+        <select [(ngModel)]="selectedYear" (change)="applyMonthYear()">
+          <option *ngFor="let year of years" [ngValue]="year">{{ year }}</option>
+        </select>
+      </label>
       <label>
         Desde
         <input type="date" [(ngModel)]="filters.desde">

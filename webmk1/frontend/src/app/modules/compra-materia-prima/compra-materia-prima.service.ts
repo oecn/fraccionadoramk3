@@ -11,6 +11,8 @@ import {
   FacturaCompraImportResponse,
   FacturaCompraPreview,
   LoteAbiertoRow,
+  LoteDeleteRequest,
+  LoteDeleteResponse,
 } from './models/compra-materia-prima.models';
 
 @Injectable({ providedIn: 'root' })
@@ -42,5 +44,9 @@ export class CompraMateriaPrimaService {
 
   importarFactura(payload: FacturaCompraImportRequest): Observable<FacturaCompraImportResponse> {
     return this.http.post<FacturaCompraImportResponse>(`${this.baseUrl}/compra-materia-prima/facturas/import`, payload);
+  }
+
+  eliminarLote(lotId: number, payload: LoteDeleteRequest): Observable<LoteDeleteResponse> {
+    return this.http.delete<LoteDeleteResponse>(`${this.baseUrl}/compra-materia-prima/compras/${lotId}`, { body: payload });
   }
 }

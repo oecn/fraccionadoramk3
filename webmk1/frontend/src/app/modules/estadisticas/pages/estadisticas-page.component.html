@@ -1,0 +1,212 @@
+<main class="layout">
+  <section class="header-band">
+    <div>
+      <span class="eyebrow">ESTADISTICAS</span>
+      <h1>Tablero gerencial</h1>
+      <p>Rentabilidad, caja, inventario y clientes en una vista ejecutiva.</p>
+    </div>
+    <div class="header-summary" *ngIf="data() as d">
+      <strong>{{ d.source }}</strong>
+      <span>{{ d.from_date }} / {{ d.to_date }}</span>
+      <small>Actualizado {{ d.updated_at }}</small>
+    </div>
+  </section>
+
+  <section class="filters-panel">
+    <label>
+      Desde
+      <input type="date" [(ngModel)]="filters.from_date">
+    </label>
+    <label>
+      Hasta
+      <input type="date" [(ngModel)]="filters.to_date">
+    </label>
+    <label>
+      Top
+      <input type="number" min="1" max="50" [(ngModel)]="filters.top_n">
+    </label>
+    <button type="button" class="primary-action" (click)="refresh()" [disabled]="loading()">
+      {{ loading() ? 'Cargando...' : 'Refrescar' }}
+    </button>
+  </section>
+
+  <p class="error" *ngIf="error()">{{ error() }}</p>
+
+  <ng-container *ngIf="data() as d">
+    <section class="kpi-grid">
+      <article class="kpi" *ngFor="let kpi of d.kpis" [ngClass]="kpi.tone">
+        <span>{{ kpi.title }}</span>
+        <strong>{{ kpi.value }}</strong>
+        <small>{{ kpi.subtitle }}</small>
+      </article>
+    </section>
+
+    <section class="panel alerts-panel">
+      <header>Alertas ejecutivas</header>
+      <div class="alert-grid" *ngIf="d.alertas.length > 0; else noAlerts">
+        <article
+          class="alert-card"
+          *ngFor="let alerta of d.alertas"
+          [ngClass]="alertClass(alerta.severidad)"
+          (dblclick)="openAlert(alerta)"
+        >
+          <div>
+            <span>{{ alerta.severidad }}</span>
+            <strong>{{ alerta.titulo }}</strong>
+            <p>{{ alerta.detalle }}</p>
+          </div>
+          <em *ngIf="alerta.monto_gs !== null">{{ fmtGs(alerta.monto_gs) }} Gs</em>
+          <button type="button" (click)="openAlert(alerta)">Ver</button>
+        </article>
+      </div>
+      <ng-template #noAlerts>
+        <div class="empty">Sin alertas ejecutivas activas.</div>
+      </ng-template>
+    </section>
+
+    <section class="grid-main">
+      <article class="panel">
+        <header>Rentabilidad por producto</header>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Producto</th>
+                <th class="num">Venta</th>
+                <th class="num">Costo est.</th>
+                <th class="num">Margen</th>
+                <th class="num">%</th>
+                <th class="num">Kg vend.</th>
+                <th class="num">Merma</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr *ngFor="let row of d.productos">
+                <td>{{ row.producto }}</td>
+                <td class="num">{{ fmtGs(row.venta_gs) }}</td>
+                <td class="num">{{ fmtGs(row.costo_estimado_gs) }}</td>
+                <td class="num strong">{{ fmtGs(row.margen_gs) }}</td>
+                <td class="num">{{ fmtNumber(row.margen_pct, 1) }}%</td>
+                <td class="num">{{ fmtKg(row.kg_vendidos) }}</td>
+                <td class="num">{{ fmtKg(row.merma_kg) }}</td>
+              </tr>
+              <tr *ngIf="d.productos.length === 0">
+                <td colspan="7" class="empty">Sin ventas en el periodo.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </article>
+
+      <article class="panel">
+        <header>Caja gerencial</header>
+        <div class="cash-list">
+          <div class="cash-row" *ngFor="let row of d.caja" [class.result]="row.tipo === 'Resultado'">
+            <div>
+              <strong>{{ row.concepto }}</strong>
+              <span>{{ row.detalle }}</span>
+            </div>
+            <em>{{ fmtGs(row.monto_gs) }}</em>
+          </div>
+        </div>
+      </article>
+    </section>
+
+    <section class="grid-secondary">
+      <article class="panel">
+        <header>Inventario y cobertura</header>
+        <div class="table-wrap compact">
+          <table>
+            <thead>
+              <tr>
+                <th>Producto</th>
+                <th class="num">Stock kg</th>
+                <th class="num">Valor MP</th>
+                <th class="num">Valor PT</th>
+                <th class="num">Consumo/dia</th>
+                <th>Estado</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr *ngFor="let row of d.inventario">
+                <td>{{ row.producto }}</td>
+                <td class="num">{{ fmtKg(row.stock_kg) }}</td>
+                <td class="num">{{ fmtGs(row.valor_materia_prima_gs) }}</td>
+                <td class="num">{{ fmtGs(row.valor_producto_terminado_gs) }}</td>
+                <td class="num">{{ fmtKg(row.consumo_diario_kg) }}</td>
+                <td><span class="pill" [ngClass]="stateClass(row.estado)">{{ coverageLabel(row.dias_cobertura) }}</span></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </article>
+
+      <article class="panel">
+        <header>Clientes principales</header>
+        <div class="table-wrap compact">
+          <table>
+            <thead>
+              <tr>
+                <th>Cliente</th>
+                <th class="num">Fact.</th>
+                <th class="num">Total</th>
+                <th class="num">Ticket</th>
+                <th>Ultima</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr *ngFor="let row of d.clientes">
+                <td>{{ row.cliente }}</td>
+                <td class="num">{{ row.facturas }}</td>
+                <td class="num">{{ fmtGs(row.total_gs) }}</td>
+                <td class="num">{{ fmtGs(row.ticket_promedio_gs) }}</td>
+                <td>{{ row.ultima_compra || '-' }}</td>
+              </tr>
+              <tr *ngIf="d.clientes.length === 0">
+                <td colspan="5" class="empty">Sin clientes en el periodo.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </article>
+    </section>
+  </ng-container>
+
+  <div class="modal-backdrop" *ngIf="selectedAlert() as alerta" (click)="closeAlert()">
+    <section class="modal" (click)="$event.stopPropagation()">
+      <header>
+        <div>
+          <span class="eyebrow">{{ alerta.tipo }}</span>
+          <h2>{{ alerta.titulo }}</h2>
+          <p>{{ alerta.accion }}</p>
+        </div>
+        <button type="button" aria-label="Cerrar" (click)="closeAlert()">X</button>
+      </header>
+      <div class="modal-summary">
+        <strong>{{ alerta.detalle }}</strong>
+        <em *ngIf="alerta.monto_gs !== null">{{ fmtGs(alerta.monto_gs) }} Gs</em>
+      </div>
+      <div class="table-wrap compact">
+        <table>
+          <thead>
+            <tr>
+              <th>Detalle</th>
+              <th>Dato</th>
+              <th class="num">Monto</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let item of alerta.detalles">
+              <td>{{ item.label }}</td>
+              <td>{{ item.value }}</td>
+              <td class="num">{{ item.monto_gs === null ? '-' : fmtGs(item.monto_gs) }}</td>
+            </tr>
+            <tr *ngIf="alerta.detalles.length === 0">
+              <td colspan="3" class="empty">Sin detalle adicional.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </div>
+</main>

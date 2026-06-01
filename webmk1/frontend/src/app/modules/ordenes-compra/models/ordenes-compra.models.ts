@@ -27,6 +27,7 @@ export type OrdenCompraRow = {
   monto_total: number;
   items_count: number;
   completada: boolean;
+  nota_remision: string;
   created_at: string;
   pct_listo_envio: number;
 };
@@ -44,6 +45,7 @@ export type OrdenCompraDeleteResponse = {
 export type OrdenCompraStatusResponse = {
   oc_id: number;
   completada: boolean;
+  nota_remision: string;
   message: string;
 };
 

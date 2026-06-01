@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import datetime as dt
+import re
 import unicodedata
 
 from core.google_sheets import append_factura
@@ -12,11 +13,20 @@ PRODUCT_ORDER = [
     "arroz",
     "azucar",
     "pororo",
-    "poroto rojo",
+    "poroto pyta",
     "galleta molida",
     "locro",
     "locrillo",
-    "lenteja",
+]
+
+VENTA_ORDER = [
+    ("arroz", [250, 500, 1000]),
+    ("azucar", [250, 500, 1000]),
+    ("pororo", [200, 400, 800]),
+    ("poroto pyta", [200, 400]),
+    ("galleta molida", [200, 400, 800]),
+    ("locro", [200, 400]),
+    ("locrillo", [200, 400]),
 ]
 
 
@@ -32,7 +42,7 @@ def _normalize_product_key(name: str) -> str:
     if "pororo" in text:
         return "pororo"
     if "poroto" in text:
-        return "poroto rojo"
+        return "poroto pyta"
     if "gallet" in text or "molida" in text:
         return "galleta molida"
     if "locrillo" in text:
@@ -56,10 +66,8 @@ def _gramajes_permitidos(product_name: str) -> list[int]:
     key = _normalize_product_key(product_name)
     if key in {"arroz", "azucar"}:
         return [250, 500, 1000]
-    if key in {"poroto rojo", "locro", "locrillo"}:
+    if key in {"poroto pyta", "locro", "locrillo"}:
         return [200, 400]
-    if key == "lenteja":
-        return [250, 500]
     return [200, 400, 800]
 
 
@@ -70,47 +78,65 @@ def _gram_order_idx(product_name: str, gramaje: int) -> int:
         return 999
 
 
+def _format_invoice_no(value: str) -> str:
+    digits = re.sub(r"\D+", "", str(value or ""))[:13]
+    if not digits:
+        return ""
+    if len(digits) != 13:
+        raise ValueError("El nro. de factura debe tener 13 digitos: 000-000-0000000.")
+    return f"{digits[:3]}-{digits[3:6]}-{digits[6:]}"
+
+
 class VentasPaquetesRepository:
     def options(self) -> VentaOptions:
         with connection("fraccionadora") as cn:
-            rows = cn.execute(
-                """
-                SELECT ps.product_id, p.name AS producto, ps.gramaje, ps.paquetes,
-                       pp.price_gs, pp.iva
-                FROM package_stock ps
-                JOIN products p ON p.id = ps.product_id
-                LEFT JOIN package_prices pp ON pp.product_id = ps.product_id AND pp.gramaje = ps.gramaje
-                WHERE ps.paquetes > 0
-                ORDER BY p.name, ps.gramaje
-                """
-            ).fetchall()
-        rows = sorted(
-            rows,
-            key=lambda r: (
-                _product_order_idx(r["producto"] or ""),
-                r["producto"] or "",
-                _gram_order_idx(r["producto"] or "", int(r["gramaje"] or 0)),
-                int(r["gramaje"] or 0),
-            ),
-        )
-        return VentaOptions(
-            stock=[
-                VentaStockItem(
-                    product_id=int(r["product_id"]),
-                    producto=r["producto"] or "",
-                    gramaje=int(r["gramaje"] or 0),
-                    paquetes=int(r["paquetes"] or 0),
-                    price_gs=float(r["price_gs"]) if r["price_gs"] is not None else None,
-                    iva=int(r["iva"]) if r["iva"] is not None else None,
+            products = cn.execute("SELECT id, name FROM products ORDER BY name").fetchall()
+            stock_rows = cn.execute("SELECT product_id, gramaje, paquetes FROM package_stock").fetchall()
+            price_rows = cn.execute("SELECT product_id, gramaje, price_gs, iva FROM package_prices").fetchall()
+
+        products_by_key: dict[str, object] = {}
+        for product in products:
+            key = _normalize_product_key(product["name"] or "")
+            products_by_key.setdefault(key, product)
+
+        stock_map = {
+            (int(r["product_id"]), int(r["gramaje"])): int(r["paquetes"] or 0)
+            for r in stock_rows
+        }
+        price_map = {
+            (int(r["product_id"]), int(r["gramaje"])): r
+            for r in price_rows
+        }
+
+        stock: list[VentaStockItem] = []
+        for key, gramajes in VENTA_ORDER:
+            product = products_by_key.get(key)
+            if not product:
+                continue
+            product_id = int(product["id"])
+            producto = product["name"] or ""
+            for gramaje in gramajes:
+                price = price_map.get((product_id, gramaje))
+                stock.append(
+                    VentaStockItem(
+                        product_id=product_id,
+                        producto=producto,
+                        gramaje=gramaje,
+                        paquetes=stock_map.get((product_id, gramaje), 0),
+                        price_gs=float(price["price_gs"]) if price and price["price_gs"] is not None else None,
+                        iva=int(price["iva"]) if price and price["iva"] is not None else None,
+                    )
                 )
-                for r in rows
-            ],
-            hoy=dt.date.today().isoformat(),
-        )
+
+        return VentaOptions(stock=stock, hoy=dt.date.today().isoformat())
 
     def create(self, payload: VentaCreate) -> VentaResumen:
         if not payload.items:
             raise ValueError("No hay items para facturar.")
+        invoice_no = _format_invoice_no(payload.invoice_no)
+        if not invoice_no:
+            raise ValueError("Ingrese nro. de factura.")
+        invoice_digits = re.sub(r"\D+", "", invoice_no)
 
         fecha = (payload.fecha or "").strip()
         if fecha:
@@ -123,6 +149,18 @@ class VentasPaquetesRepository:
             fecha_sql = None
 
         with connection("fraccionadora") as cn:
+            duplicate = cn.execute(
+                """
+                SELECT id
+                FROM sales_invoices
+                WHERE regexp_replace(COALESCE(invoice_no, ''), '[^0-9]', '', 'g') = %s
+                LIMIT 1
+                """,
+                (invoice_digits,),
+            ).fetchone()
+            if duplicate:
+                raise ValueError(f"El nro. de factura {invoice_no} ya existe.")
+
             lineas: list[tuple[int, int, int, float, int, float, float, float]] = []
             faltan_precios: list[str] = []
             sorted_items = sorted(
@@ -138,12 +176,12 @@ class VentasPaquetesRepository:
                     """
                     SELECT COALESCE(ps.paquetes, 0) AS paquetes, p.name AS producto,
                            pp.price_gs, pp.iva
-                    FROM package_stock ps
-                    JOIN products p ON p.id = ps.product_id
-                    LEFT JOIN package_prices pp ON pp.product_id = ps.product_id AND pp.gramaje = ps.gramaje
-                    WHERE ps.product_id = %s AND ps.gramaje = %s
+                    FROM products p
+                    LEFT JOIN package_stock ps ON ps.product_id = p.id AND ps.gramaje = %s
+                    LEFT JOIN package_prices pp ON pp.product_id = p.id AND pp.gramaje = %s
+                    WHERE p.id = %s
                     """,
-                    (item.product_id, item.gramaje),
+                    (item.gramaje, item.gramaje, item.product_id),
                 ).fetchone()
                 if not stock:
                     raise ValueError(f"Stock no encontrado para producto {item.product_id} {item.gramaje} g.")
@@ -185,7 +223,7 @@ class VentasPaquetesRepository:
                     VALUES(%s, %s, %s, %s, %s, %s, %s, %s)
                     RETURNING id
                     """,
-                    (fecha_sql, payload.invoice_no.strip(), payload.customer.strip(), grav5, iva5, grav10, iva10, total),
+                    (fecha_sql, invoice_no, payload.customer.strip(), grav5, iva5, grav10, iva10, total),
                 ).fetchone()
             else:
                 invoice_row = cn.execute(
@@ -196,7 +234,7 @@ class VentasPaquetesRepository:
                     VALUES(%s, %s, %s, %s, %s, %s, %s)
                     RETURNING id
                     """,
-                    (payload.invoice_no.strip(), payload.customer.strip(), grav5, iva5, grav10, iva10, total),
+                    (invoice_no, payload.customer.strip(), grav5, iva5, grav10, iva10, total),
                 ).fetchone()
 
             invoice_id = int(invoice_row["id"])

@@ -41,6 +41,7 @@ export type FraccionamientoHistoryRow = {
   kg_consumidos: number;
   bolsas_eq: string;
   lote: string;
+  lot_id: number | null;
 };
 
 export type FraccionamientoOptions = {
@@ -65,6 +66,18 @@ export type FraccionamientoCreate = {
   paquetes: number;
   fecha: string;
   lot_id: number | null;
+};
+
+export type FraccionamientoUpdate = {
+  gramaje: number;
+  paquetes: number;
+  lot_id: number | null;
+};
+
+export type FraccionamientoDeleteResponse = {
+  id: number;
+  deleted: boolean;
+  message: string;
 };
 
 export type ConsumoPreview = {

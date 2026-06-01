@@ -44,6 +44,7 @@ class FraccionamientoHistoryRow(BaseModel):
     kg_consumidos: float
     bolsas_eq: str
     lote: str
+    lot_id: int | None = None
 
 
 class FraccionamientoOptions(BaseModel):
@@ -68,6 +69,18 @@ class FraccionamientoCreate(BaseModel):
     paquetes: int = Field(gt=0)
     fecha: str
     lot_id: int | None = None
+
+
+class FraccionamientoUpdate(BaseModel):
+    gramaje: int
+    paquetes: int = Field(gt=0)
+    lot_id: int | None = None
+
+
+class FraccionamientoDeleteResponse(BaseModel):
+    id: int
+    deleted: bool
+    message: str
 
 
 class ConsumoPreview(BaseModel):

@@ -13,7 +13,7 @@
 }
 
 .filters {
-  grid-template-columns: 110px 170px 160px 160px minmax(210px, 1fr) 220px;
+  grid-template-columns: 100px 150px 150px 150px 130px minmax(190px, 1fr) 210px;
 }
 
 .finance-stack {
@@ -46,6 +46,21 @@
 .grid-line {
   stroke: #e7edf5;
   stroke-width: 1;
+}
+
+.quarter-band {
+  fill: #eef8f9;
+  opacity: 0.55;
+}
+
+.quarter-band.danger {
+  fill: #fef2f2;
+}
+
+.quarter-label {
+  fill: #53677f;
+  font-size: 11px;
+  font-weight: 900;
 }
 
 .chart-bar {
@@ -149,6 +164,71 @@
   width: 10px;
   height: 10px;
   border-radius: 999px;
+}
+
+.quarter-kpis {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 12px;
+  padding: 0 16px 16px;
+}
+
+.quarter-card {
+  display: grid;
+  gap: 10px;
+  padding: 13px;
+  border: 1px solid #bbf7d0;
+  border-radius: 8px;
+  background: #f0fdf4;
+}
+
+.quarter-card.danger {
+  border-color: #fecaca;
+  background: #fef2f2;
+}
+
+.quarter-card header {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  color: #061326;
+}
+
+.quarter-card header span {
+  color: #66758d;
+  font-weight: 850;
+}
+
+.quarter-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.quarter-grid div {
+  display: grid;
+  gap: 3px;
+  padding: 8px;
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.quarter-grid span {
+  color: #66758d;
+  font-size: 11px;
+  font-weight: 850;
+}
+
+.quarter-grid strong {
+  color: #061326;
+  font-size: 13px;
+}
+
+.quarter-card p {
+  margin: 0;
+  color: #38465a;
+  font-size: 12px;
+  font-weight: 800;
 }
 
 @media (max-width: 1100px) {

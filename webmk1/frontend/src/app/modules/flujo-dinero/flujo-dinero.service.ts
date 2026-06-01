@@ -18,10 +18,10 @@ export class FlujoDineroService {
     let params = new HttpParams()
       .set('year', filters.year)
       .set('quarter', filters.quarter)
-      .set('retencion_mode', filters.retencion_mode);
+      .set('retencion_mode', filters.retencion_mode)
+      .set('include_iva', filters.include_iva);
     if (filters.from_date) params = params.set('from_date', filters.from_date);
     if (filters.to_date) params = params.set('to_date', filters.to_date);
     return this.http.get<FlujoSummary>(`${this.baseUrl}/flujo-dinero/summary`, { params });
   }
 }
-

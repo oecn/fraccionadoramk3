@@ -8,6 +8,7 @@
         <span>{{ filters.from_date }} / {{ filters.to_date }}</span>
         <span>{{ d.total_registros }} registros</span>
         <span>Total: {{ fmtGs(d.total_gs) }} Gs</span>
+        <span>Eliminado: {{ fmtGs(d.total_eliminado_gs) }} Gs</span>
       </div>
     </div>
   </section>
@@ -26,6 +27,11 @@
         <span>Total compras</span>
         <strong>{{ fmtGs(d.total_gs) }}</strong>
         <small>Guaraníes</small>
+      </article>
+      <article class="kpi">
+        <span>Eliminaciones</span>
+        <strong>{{ fmtGs(d.total_eliminado_gs) }}</strong>
+        <small>Auditadas en el periodo</small>
       </article>
     </section>
 
@@ -59,22 +65,26 @@
           <thead>
             <tr>
               <th>ID</th>
+              <th>Tipo</th>
               <th>Fecha</th>
               <th>Factura</th>
               <th>Proveedor</th>
+              <th>Producto / motivo</th>
               <th class="num">Costo total (Gs)</th>
             </tr>
           </thead>
           <tbody>
             <tr *ngFor="let row of d.rows">
               <td>{{ row.id }}</td>
+              <td>{{ row.tipo }}</td>
               <td>{{ row.ts || '-' }}</td>
               <td>{{ row.factura || '-' }}</td>
               <td>{{ row.proveedor || '-' }}</td>
+              <td>{{ row.tipo === 'Eliminacion' ? (row.producto + ' / ' + row.motivo) : '-' }}</td>
               <td class="num">{{ fmtGs(row.costo_total_gs) }}</td>
             </tr>
             <tr *ngIf="d.rows.length === 0">
-              <td colspan="5" style="text-align:center; color:#66758d;">Sin resultados</td>
+              <td colspan="7" style="text-align:center; color:#66758d;">Sin resultados</td>
             </tr>
           </tbody>
         </table>

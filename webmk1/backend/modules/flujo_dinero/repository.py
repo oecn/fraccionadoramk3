@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Any
 
 from core.database import connection
-from modules.flujo_dinero.schemas import FlujoKpi, FlujoMonthRow, FlujoSummary
+from modules.flujo_dinero.schemas import FlujoKpi, FlujoMonthRow, FlujoQuarterRow, FlujoSummary
 
 
 MONTHS = [
@@ -141,6 +141,7 @@ class FlujoDineroRepository:
         year: int | None = None,
         quarter: str = "Todos",
         retencion_mode: bool = False,
+        include_iva: bool = True,
         from_date: str = "",
         to_date: str = "",
     ) -> FlujoSummary:
@@ -150,6 +151,13 @@ class FlujoDineroRepository:
             selected_quarter = "Todos"
 
         ventas_gross = self._monthly_sum("sales_invoices", "total_gs", selected_year, from_date, to_date)
+        ventas_sin_iva = self._monthly_sum(
+            "sales_invoices",
+            "total_gs - COALESCE(iva5_gs, 0) - COALESCE(iva10_gs, 0)",
+            selected_year,
+            from_date,
+            to_date,
+        )
         ventas_retencion = self._monthly_sum(
             "sales_invoices",
             "total_gs - 0.30 * (COALESCE(iva5_gs, 0) + COALESCE(iva10_gs, 0))",
@@ -160,11 +168,19 @@ class FlujoDineroRepository:
         ventas_bolsas = self._monthly_sum_optional("bag_sales", "total_gs", selected_year, from_date, to_date)
         for month_no, amount in ventas_bolsas.items():
             ventas_gross[month_no] = ventas_gross.get(month_no, 0.0) + amount
+            ventas_sin_iva[month_no] = ventas_sin_iva.get(month_no, 0.0) + amount
             ventas_retencion[month_no] = ventas_retencion.get(month_no, 0.0) + amount
 
         compras = self._monthly_sum("raw_lots", "costo_total_gs", selected_year, from_date, to_date)
         gastos = self._monthly_sum_optional("expenses", "monto_gs", selected_year, from_date, to_date)
         notas_credito_gross = self._monthly_sum_optional("credit_notes", "total_gs", selected_year, from_date, to_date)
+        notas_credito_sin_iva = self._monthly_sum_optional(
+            "credit_notes",
+            "total_gs - COALESCE(iva5_gs, 0) - COALESCE(iva10_gs, 0)",
+            selected_year,
+            from_date,
+            to_date,
+        )
         notas_credito_retencion = self._monthly_sum_optional(
             "credit_notes",
             "total_gs - 0.30 * (COALESCE(iva5_gs, 0) + COALESCE(iva10_gs, 0))",
@@ -173,8 +189,10 @@ class FlujoDineroRepository:
             to_date,
         )
 
-        ventas = ventas_retencion if retencion_mode else ventas_gross
-        notas_credito = notas_credito_retencion if retencion_mode else notas_credito_gross
+        ventas_base = ventas_gross if include_iva else ventas_sin_iva
+        notas_base = notas_credito_gross if include_iva else notas_credito_sin_iva
+        ventas = ventas_retencion if retencion_mode else ventas_base
+        notas_credito = notas_credito_retencion if retencion_mode else notas_base
         saldo_inicial = self._saldo_inicial(selected_year, from_date, to_date)
 
         allowed_months = QUARTERS.get(selected_quarter)
@@ -212,6 +230,36 @@ class FlujoDineroRepository:
         egresos_total = sum(r.compras + r.gastos for r in rows)
         flujo_total = sum(r.flujo for r in rows)
         banco_estimado = saldo_inicial + flujo_total
+        quarter_rows: list[FlujoQuarterRow] = []
+        by_month = {r.month_no: r for r in rows}
+        for q, months in QUARTERS.items():
+            q_rows = [by_month[m] for m in sorted(months) if m in by_month]
+            if not q_rows:
+                continue
+            q_ventas = sum(r.ventas for r in q_rows)
+            q_compras = sum(r.compras for r in q_rows)
+            q_gastos = sum(r.gastos for r in q_rows)
+            q_notas = sum(r.notas_credito for r in q_rows)
+            q_flujo = sum(r.flujo for r in q_rows)
+            q_start = q_rows[0].acumulado - q_rows[0].flujo
+            q_end = q_rows[-1].acumulado
+            quarter_rows.append(
+                FlujoQuarterRow(
+                    quarter=q,
+                    label=f"{q} {selected_year}",
+                    start_month=q_rows[0].month,
+                    end_month=q_rows[-1].month,
+                    saldo_inicio=q_start,
+                    saldo_fin=q_end,
+                    ventas=q_ventas,
+                    compras=q_compras,
+                    gastos=q_gastos,
+                    notas_credito=q_notas,
+                    flujo=q_flujo,
+                    margen=(q_flujo / q_ventas * 100.0) if q_ventas > 0 else 0.0,
+                    profitable=q_flujo >= 0,
+                )
+            )
 
         return FlujoSummary(
             year=selected_year,
@@ -219,6 +267,7 @@ class FlujoDineroRepository:
             to_date=to_date,
             quarter=selected_quarter,
             retencion_mode=retencion_mode,
+            include_iva=include_iva,
             saldo_inicial=saldo_inicial,
             kpis=[
                 FlujoKpi(title="Total ventas", value=self._fmt_gs(ventas_total), subtitle="Gs"),
@@ -228,7 +277,7 @@ class FlujoDineroRepository:
                 FlujoKpi(title="Flujo neto", value=self._fmt_gs(flujo_total), subtitle="Gs"),
                 FlujoKpi(title="Estimado en banco", value=self._fmt_gs(banco_estimado), subtitle=f"Saldo inicial {self._fmt_gs(saldo_inicial)}"),
             ],
+            quarter_rows=quarter_rows,
             rows=rows,
             updated_at=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         )
-

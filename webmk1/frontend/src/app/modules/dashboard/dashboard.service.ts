@@ -10,6 +10,7 @@ import {
   PaymentCheckOption,
   PaymentCheckStatus,
   PaymentDetailRow,
+  PaymentInvoiceDetail,
   PaymentReceiptUpdateRequest,
   PaymentReceiptUpdateResponse,
   PaymentRegisterRequest,
@@ -54,6 +55,10 @@ export class DashboardService {
 
   getPaymentDetails(): Observable<PaymentDetailRow[]> {
     return this.http.get<PaymentDetailRow[]>(`${this.baseUrl}/dashboard/payments/details`);
+  }
+
+  getPaymentInvoiceDetail(lotId: number): Observable<PaymentInvoiceDetail> {
+    return this.http.get<PaymentInvoiceDetail>(`${this.baseUrl}/dashboard/payments/invoices/${lotId}`);
   }
 
   updatePaymentReceipt(payload: PaymentReceiptUpdateRequest): Observable<PaymentReceiptUpdateResponse> {

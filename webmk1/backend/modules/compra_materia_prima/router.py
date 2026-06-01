@@ -9,6 +9,8 @@ from modules.compra_materia_prima.schemas import (
     FacturaCompraImportResponse,
     FacturaCompraPreview,
     LoteAbiertoRow,
+    LoteDeleteRequest,
+    LoteDeleteResponse,
 )
 
 
@@ -47,5 +49,13 @@ def parse_factura(file: UploadFile = File(...)) -> FacturaCompraPreview:
 def import_factura(payload: FacturaCompraImportRequest) -> FacturaCompraImportResponse:
     try:
         return CompraMateriaPrimaRepository().import_factura(payload)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.delete("/compras/{lot_id}", response_model=LoteDeleteResponse)
+def delete_lote(lot_id: int, payload: LoteDeleteRequest) -> LoteDeleteResponse:
+    try:
+        return CompraMateriaPrimaRepository().delete_lote(lot_id=lot_id, payload=payload)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc

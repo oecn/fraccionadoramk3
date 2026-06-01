@@ -57,8 +57,9 @@ def delete(oc_id: int) -> OrdenCompraDeleteResponse:
 
 
 @router.post("/{oc_id}/status", response_model=OrdenCompraStatusResponse)
-def set_status(oc_id: int, completada: bool) -> OrdenCompraStatusResponse:
+def set_status(oc_id: int, completada: bool, nota_remision: str = "") -> OrdenCompraStatusResponse:
     try:
-        return OrdenesCompraRepository().set_status(oc_id, completada)
+        return OrdenesCompraRepository().set_status(oc_id, completada, nota_remision)
     except ValueError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
+        status = 400 if completada else 404
+        raise HTTPException(status_code=status, detail=str(exc)) from exc

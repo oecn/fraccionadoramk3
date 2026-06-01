@@ -86,3 +86,13 @@ export type FacturaCompraImportResponse = {
   message: string;
   lotes: LoteAbiertoRow[];
 };
+
+export type LoteDeleteRequest = {
+  motivo: string;
+};
+
+export type LoteDeleteResponse = {
+  deleted: boolean;
+  lot_id: number;
+  message: string;
+};

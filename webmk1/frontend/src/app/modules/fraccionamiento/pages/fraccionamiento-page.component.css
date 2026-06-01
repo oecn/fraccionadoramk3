@@ -86,6 +86,119 @@
   max-height: 305px;
 }
 
+.actions-cell {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  min-width: 150px;
+}
+
+.text-action,
+.danger-action,
+.icon-close,
+.secondary-action {
+  border: 1px solid #d6e2ef;
+  border-radius: 8px;
+  background: #fff;
+  color: #12314a;
+  font-weight: 850;
+  cursor: pointer;
+}
+
+.text-action,
+.danger-action {
+  padding: 7px 10px;
+  font-size: 12px;
+}
+
+.danger-action {
+  border-color: #ffd4d4;
+  color: #b42318;
+}
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: grid;
+  place-items: center;
+  padding: 18px;
+  background: rgba(10, 24, 39, 0.42);
+}
+
+.edit-modal {
+  width: min(720px, 100%);
+  max-height: calc(100vh - 36px);
+  overflow: auto;
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 24px 70px rgba(12, 30, 48, 0.32);
+}
+
+.edit-modal header,
+.edit-modal footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px;
+  border-bottom: 1px solid #e4edf6;
+}
+
+.edit-modal footer {
+  justify-content: flex-end;
+  border-top: 1px solid #e4edf6;
+  border-bottom: 0;
+}
+
+.edit-modal header div,
+.edit-summary div {
+  display: grid;
+  gap: 4px;
+}
+
+.edit-modal header span,
+.edit-summary span {
+  color: #66758d;
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.edit-modal header strong {
+  color: #12314a;
+  font-size: 18px;
+}
+
+.icon-close,
+.secondary-action {
+  padding: 9px 12px;
+}
+
+.edit-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  padding: 16px 16px 0;
+}
+
+.edit-summary div {
+  padding: 12px;
+  border: 1px solid #d8e2ee;
+  border-radius: 8px;
+  background: #f8fbfd;
+}
+
+.edit-grid {
+  display: grid;
+  grid-template-columns: 140px 160px minmax(0, 1fr);
+  gap: 12px;
+  padding: 16px;
+}
+
+.modal-save {
+  margin-left: 0;
+}
+
 @media (max-width: 900px) {
   .header-band {
     flex-direction: column;
@@ -96,7 +209,13 @@
   .stock-grid,
   .form-grid,
   .filters-panel,
-  .preview {
+  .preview,
+  .edit-summary,
+  .edit-grid {
     grid-template-columns: 1fr;
+  }
+
+  .actions-cell {
+    justify-content: flex-start;
   }
 }
