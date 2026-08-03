@@ -34,6 +34,10 @@ export class GastosEgresosService {
     return this.http.post<ExpenseRow>(`${this.baseUrl}/gastos`, payload);
   }
 
+  update(id: number, payload: ExpenseCreate): Observable<ExpenseRow> {
+    return this.http.put<ExpenseRow>(`${this.baseUrl}/gastos/${id}`, payload);
+  }
+
   parseIps(file: File): Observable<IpsParseResult> {
     const formData = new FormData();
     formData.append('file', file);

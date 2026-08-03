@@ -36,6 +36,14 @@ def create(payload: ExpenseCreate) -> ExpenseRow:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
+@router.put("/gastos/{expense_id}", response_model=ExpenseRow)
+def update(expense_id: int, payload: ExpenseCreate) -> ExpenseRow:
+    try:
+        return GastosEgresosRepository().update(expense_id, payload)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
 @router.post("/ips/parse", response_model=IpsParseResult)
 async def parse_ips(file: UploadFile = File(...)) -> IpsParseResult:
     suffix = Path(file.filename or "ips.pdf").suffix or ".pdf"

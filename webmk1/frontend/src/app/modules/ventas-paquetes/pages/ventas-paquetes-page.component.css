@@ -25,6 +25,71 @@
   margin: 0;
 }
 
+.pdf-panel {
+  display: grid;
+  gap: 12px;
+}
+
+.pdf-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 0 15px;
+}
+
+.file-button,
+.secondary-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 36px;
+  padding: 0 14px;
+  border: 1px solid #b9c8d8;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #12314a;
+  font-size: 13px;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.file-button input {
+  display: none;
+}
+
+.secondary-action:disabled,
+.file-button:has(input:disabled) {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.pdf-totals {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  color: #314256;
+  font-size: 13px;
+  font-weight: 850;
+}
+
+.pdf-totals strong {
+  color: #071326;
+}
+
+.pdf-preview {
+  max-height: 230px;
+  margin: 0 15px 12px;
+}
+
+.warning {
+  margin: 0 15px 12px;
+  color: #92400e;
+  font-size: 13px;
+  font-weight: 850;
+}
+
 .selected-info {
   display: flex;
   gap: 12px;
@@ -163,5 +228,15 @@ tbody tr.over-stock .qty-input {
   .tax-summary,
   .sheet-row {
     grid-template-columns: 1fr;
+  }
+
+  .pdf-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .file-button,
+  .secondary-action {
+    width: 100%;
   }
 }

@@ -184,7 +184,16 @@
   </section>
 
   <article class="panel" *ngIf="summary() as s">
-    <header>Historial fraccionamiento</header>
+    <header class="panel-header-split">
+      <span>Historial fraccionamiento</span>
+      <label class="history-type-filter">
+        Tipo de producto
+        <select [(ngModel)]="historyProductTypeId">
+          <option [ngValue]="null">Todos</option>
+          <option *ngFor="let p of options().productos" [ngValue]="p.id">{{ p.name }}</option>
+        </select>
+      </label>
+    </header>
     <div class="table-wrap">
       <table>
         <thead>
@@ -201,7 +210,7 @@
           </tr>
         </thead>
         <tbody>
-          <tr *ngFor="let row of s.history">
+          <tr *ngFor="let row of historyRows(s)">
             <td>{{ row.id }}</td>
             <td>{{ row.fecha }}</td>
             <td>
@@ -219,7 +228,7 @@
               <button type="button" class="danger-action" (click)="eliminar(row)">Eliminar</button>
             </td>
           </tr>
-          <tr *ngIf="s.history.length === 0">
+          <tr *ngIf="historyRows(s).length === 0">
             <td colspan="9" class="empty">Sin registros para el filtro actual.</td>
           </tr>
         </tbody>

@@ -3,6 +3,7 @@ from pydantic import BaseModel, Field
 
 class FacturaPendienteRow(BaseModel):
     invoice_id: int
+    invoice_source: str = "sales"
     ts: str
     invoice_no: str
     customer: str
@@ -13,6 +14,7 @@ class FacturaPendienteRow(BaseModel):
 
 class CobroFacturaItemIn(BaseModel):
     invoice_id: int
+    invoice_source: str = "sales"
     monto_gs: float = Field(gt=0)
 
 
@@ -28,6 +30,7 @@ class CobroFacturaCreate(BaseModel):
 class CobroFacturaItemRow(BaseModel):
     id: int
     invoice_id: int
+    invoice_source: str = "sales"
     invoice_no: str
     customer: str
     factura_total_gs: float
@@ -51,3 +54,20 @@ class CobrosSummary(BaseModel):
     pendientes: list[FacturaPendienteRow]
     cobros: list[CobroFacturaRow]
 
+
+class ReciboFacturaItem(BaseModel):
+    linea: int
+    factura: str
+    monto: float | None = None
+
+
+class ReciboPreview(BaseModel):
+    numero: str
+    ruc_emisor: str = ""
+    cliente: str = ""
+    ruc_cliente: str = ""
+    fecha: str = ""
+    cheque_no: str = ""
+    banco: str = ""
+    total: float = 0
+    items: list[ReciboFacturaItem]

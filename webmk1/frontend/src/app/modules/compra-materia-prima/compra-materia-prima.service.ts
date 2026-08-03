@@ -13,6 +13,8 @@ import {
   LoteAbiertoRow,
   LoteDeleteRequest,
   LoteDeleteResponse,
+  LotePrecioReviewRequest,
+  LotePrecioReviewResponse,
 } from './models/compra-materia-prima.models';
 
 @Injectable({ providedIn: 'root' })
@@ -48,5 +50,9 @@ export class CompraMateriaPrimaService {
 
   eliminarLote(lotId: number, payload: LoteDeleteRequest): Observable<LoteDeleteResponse> {
     return this.http.delete<LoteDeleteResponse>(`${this.baseUrl}/compra-materia-prima/compras/${lotId}`, { body: payload });
+  }
+
+  marcarPrecioRevisado(lotId: number, payload: LotePrecioReviewRequest): Observable<LotePrecioReviewResponse> {
+    return this.http.patch<LotePrecioReviewResponse>(`${this.baseUrl}/compra-materia-prima/compras/${lotId}/precio-revisado`, payload);
   }
 }

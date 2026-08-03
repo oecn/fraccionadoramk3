@@ -37,6 +37,21 @@ class LoteFraccionamientoRow(BaseModel):
     beneficio_gs: float
 
 
+class LoteVentaBolsaRow(BaseModel):
+    id: int
+    fecha: str
+    bolsas: int
+    kg_por_bolsa: float
+    kg_total: float
+    bolsas_eq: float | None
+    costo_kg_gs: float
+    costo_total_gs: float
+    precio_bolsa_gs: float
+    total_gs: float
+    cliente: str
+    factura: str
+
+
 class RecargoPresentacionRow(BaseModel):
     gramaje: int
     kg_por_paquete: float
@@ -74,3 +89,4 @@ class LoteDetalle(BaseModel):
     beneficio_pct: float | None
     recargos: list[RecargoPresentacionRow]
     fraccionamientos: list[LoteFraccionamientoRow]
+    ventas_bolsas: list[LoteVentaBolsaRow]

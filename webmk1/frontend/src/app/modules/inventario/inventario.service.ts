@@ -3,7 +3,7 @@ import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 
 import { environment } from '../../../environments/environment';
-import { CompraSugeridaResponse, InventoryAdjustmentUpdate, InventorySummary, RawStockAlertUpdate } from './models/inventario.models';
+import { CompraSugeridaResponse, FilmStockAlertUpdate, InventoryAdjustmentUpdate, InventorySummary, RawStockAlertUpdate, WeeklyInventoryCountCreate } from './models/inventario.models';
 
 @Injectable({ providedIn: 'root' })
 export class InventarioService {
@@ -18,8 +18,16 @@ export class InventarioService {
     return this.http.put<InventorySummary>(`${this.baseUrl}/inventario/raw-alerts`, { alerts });
   }
 
+  updateFilmAlerts(alerts: FilmStockAlertUpdate[]): Observable<InventorySummary> {
+    return this.http.put<InventorySummary>(`${this.baseUrl}/inventario/film-alerts`, { alerts });
+  }
+
   adjustInventory(payload: InventoryAdjustmentUpdate): Observable<InventorySummary> {
     return this.http.put<InventorySummary>(`${this.baseUrl}/inventario/adjustments`, payload);
+  }
+
+  saveWeeklyCount(payload: WeeklyInventoryCountCreate): Observable<InventorySummary> {
+    return this.http.post<InventorySummary>(`${this.baseUrl}/inventario/weekly-count`, payload);
   }
 
   compraSugerida(ventanaDias: number): Observable<CompraSugeridaResponse> {

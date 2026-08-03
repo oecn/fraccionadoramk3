@@ -7,6 +7,14 @@ class Kpi(BaseModel):
     subtitle: str = ""
 
 
+class MonthMovementSummary(BaseModel):
+    compras_gs: float
+    ventas_gs: float
+    gastos_gs: float
+    notas_credito_gs: float
+    resultado_gs: float
+
+
 class OrderRow(BaseModel):
     oc_id: int
     numero: str
@@ -124,6 +132,7 @@ class PaymentReceiptUpdateResponse(BaseModel):
 
 class CollectionRow(BaseModel):
     invoice_id: int
+    invoice_source: str = "sales"
     ts: str
     invoice_no: str
     customer: str
@@ -137,12 +146,28 @@ class CollectionRow(BaseModel):
     dias_para_cobro: int | None
 
 
+class PriceAlertRow(BaseModel):
+    lot_id: int
+    product_id: int
+    producto: str
+    proveedor: str
+    factura: str
+    estado: str
+    costo_kg_anterior_gs: float | None = None
+    costo_kg_gs: float
+    diferencia_costo_kg_gs: float
+    variacion_costo_pct: float | None = None
+    ts: str
+
+
 class DashboardSummary(BaseModel):
     kpis: list[Kpi]
     orders: list[OrderRow]
     payments: list[PaymentRow]
     collections: list[CollectionRow]
+    price_alerts: list[PriceAlertRow] = []
     trend_7: int
     trend_30: int
+    month_summary: MonthMovementSummary
     updated_at: str
     source: str = "PostgreSQL"

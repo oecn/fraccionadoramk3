@@ -19,11 +19,22 @@ export type ExpenseRow = {
   referencia_pago: string;
 };
 
+export type FixedExpenseTask = {
+  key: string;
+  label: string;
+  paid: boolean;
+  total_gs: number;
+  count: number;
+  last_date: string;
+  detail: string;
+};
+
 export type ExpenseSummary = {
   rows: ExpenseRow[];
   total_gs: number;
   tipos: string[];
   formas_pago: string[];
+  fixed_tasks: FixedExpenseTask[];
 };
 
 export type CheckStatus = {

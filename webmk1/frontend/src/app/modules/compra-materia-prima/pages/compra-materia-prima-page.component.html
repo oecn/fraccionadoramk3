@@ -10,6 +10,39 @@
   <p class="error" *ngIf="error()">{{ error() }}</p>
   <p class="message" *ngIf="message()">{{ message() }}</p>
 
+  <section class="price-review-alerts" *ngIf="pendingPriceAlerts().length > 0">
+    <div class="price-review-controls">
+      <label>
+        Revisado por
+        <input type="text" [(ngModel)]="priceReviewForm.revisado_por">
+      </label>
+      <label>
+        Estado al marcar
+        <select [(ngModel)]="priceReviewForm.estado">
+          <option>Pendiente</option>
+          <option>Precio cambiado</option>
+          <option>Revisado y OK</option>
+        </select>
+      </label>
+    </div>
+    <article class="price-review-alert" *ngFor="let row of pendingPriceAlerts()">
+      <div>
+        <strong>{{ priceChangeMessage(row) }}</strong>
+        <span>
+          Anterior {{ fmtGs(row.costo_kg_anterior_gs || 0) }} / kg,
+          nuevo {{ fmtGs(row.costo_kg_gs) }} / kg,
+          {{ priceToneLabel(row.variacion_costo_pct) }}. {{ priceImpactLabel(row) }}.
+        </span>
+      </div>
+      <div class="price-review-actions">
+        <a class="review-action link" href="/productos">Ir a cambiar precio</a>
+        <button type="button" (click)="markPriceReviewed(row)" [disabled]="reviewingPrice() === row.id">
+          {{ reviewingPrice() === row.id ? 'Marcando...' : priceReviewForm.estado }}
+        </button>
+      </div>
+    </article>
+  </section>
+
   <section class="panel factura-panel">
     <header>Cargar factura PDF</header>
     <div class="factura-upload">
@@ -40,6 +73,8 @@
               <th class="num">Kg</th>
               <th class="num">Bolsas</th>
               <th class="num">Total</th>
+              <th class="num">IVA</th>
+              <th>Precio</th>
               <th>Estado</th>
             </tr>
           </thead>
@@ -50,11 +85,21 @@
               <td class="num">{{ fmtKg(item.kg) }}</td>
               <td class="num">{{ item.bolsas }}</td>
               <td class="num">{{ fmtGs(item.total_linea) }}</td>
+              <td class="num">{{ fmtGs(item.iva5_gs + item.iva10_gs) }}</td>
+              <td>
+                <span class="price-alert" [ngClass]="priceToneClass(item.variacion_costo_pct)">
+                  {{ priceToneLabel(item.variacion_costo_pct) }}
+                </span>
+              </td>
               <td>{{ item.importable ? 'OK' : item.message }}</td>
             </tr>
           </tbody>
         </table>
       </div>
+
+      <p class="invoice-alert-preview" *ngIf="importFacturaPriceAlerts() > 0">
+        Esta factura creara {{ importFacturaPriceAlerts() }} alerta(s) de cambio de precio al confirmar.
+      </p>
 
       <button type="button" class="primary-action" (click)="importarFactura()" [disabled]="importingFactura()">
         {{ importingFactura() ? 'Importando...' : 'Confirmar carga de factura' }}
@@ -71,6 +116,10 @@
           <select [(ngModel)]="form.product_id">
             <option *ngFor="let p of options().productos" [ngValue]="p.id">{{ p.name }}</option>
           </select>
+        </label>
+        <label>
+          Fecha
+          <input type="date" [(ngModel)]="form.fecha">
         </label>
         <label>
           Proveedor
@@ -120,6 +169,11 @@
         <div>
           <span>Total compra</span>
           <strong>{{ fmtGs(form.costo_total_gs) }}</strong>
+        </div>
+        <div class="price-card" [ngClass]="priceToneClass(manualPriceVariationPct())">
+          <span>Precio vs anterior</span>
+          <strong>{{ priceToneLabel(manualPriceVariationPct()) }}</strong>
+          <small *ngIf="selectedProductLastCost()">Anterior: {{ fmtGs(selectedProductLastCost() || 0) }} / kg</small>
         </div>
       </section>
 
@@ -182,6 +236,7 @@
               <th>Factura</th>
               <th class="num">Saldo kg</th>
               <th class="num">Costo kg</th>
+              <th>Precio</th>
               <th>Accion</th>
             </tr>
           </thead>
@@ -198,16 +253,70 @@
               <td class="num">{{ fmtKg(row.kg_saldo) }}</td>
               <td class="num">{{ fmtGs(row.costo_kg_gs) }}</td>
               <td>
+                <span class="price-alert" [ngClass]="priceToneClass(row.variacion_costo_pct)">
+                  {{ row.precio_estado }} / {{ priceToneLabel(row.variacion_costo_pct) }}
+                </span>
+                <small class="price-impact" *ngIf="row.costo_kg_anterior_gs">{{ priceImpactLabel(row) }}</small>
+                <span class="reviewed-ok" *ngIf="row.precio_revisado">
+                  {{ row.precio_estado }} por {{ row.precio_revisado_por || '-' }}
+                </span>
+              </td>
+              <td>
+                <a class="review-action link" href="/productos">Ir a cambiar precio</a>
+                <button
+                  *ngIf="row.precio_cambio_detectado"
+                  type="button"
+                  class="review-action"
+                  (click)="markPriceReviewed(row)"
+                  [disabled]="reviewingPrice() === row.id"
+                >
+                  {{ reviewingPrice() === row.id ? 'Marcando...' : 'Revisado / precio OK' }}
+                </button>
                 <button type="button" class="danger-action" (click)="openDeleteDialog(row)">Eliminar</button>
               </td>
             </tr>
             <tr *ngIf="s.lotes_abiertos.length === 0">
-              <td colspan="7" class="empty">Sin lotes abiertos para el filtro actual.</td>
+              <td colspan="8" class="empty">Sin lotes abiertos para el filtro actual.</td>
             </tr>
           </tbody>
         </table>
       </div>
     </article>
+  </section>
+
+  <section class="panel" *ngIf="summary() as s">
+    <header>Historial de revisiones de precio</header>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Fecha</th>
+            <th>Producto</th>
+            <th>Estado</th>
+            <th>Revisado por</th>
+            <th class="num">Anterior kg</th>
+            <th class="num">Nuevo kg</th>
+            <th class="num">Diferencia</th>
+            <th class="num">%</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let h of s.historial_revisiones_precio">
+            <td>{{ h.created_at || '-' }}</td>
+            <td>{{ h.producto }}</td>
+            <td>{{ h.estado }}</td>
+            <td>{{ h.revisado_por || '-' }}</td>
+            <td class="num">{{ fmtGs(h.costo_kg_anterior_gs || 0) }}</td>
+            <td class="num">{{ fmtGs(h.costo_kg_gs) }}</td>
+            <td class="num">{{ fmtGs(h.diferencia_costo_kg_gs) }}</td>
+            <td class="num">{{ pctLabel(h.variacion_costo_pct) }}</td>
+          </tr>
+          <tr *ngIf="s.historial_revisiones_precio.length === 0">
+            <td colspan="8" class="empty">Sin revisiones de precio registradas.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
   </section>
 
   <div class="modal-backdrop" *ngIf="deleteDialogOpen()" (click)="closeDeleteDialog()">

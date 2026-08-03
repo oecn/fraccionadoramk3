@@ -14,8 +14,32 @@
   <p class="error" *ngIf="error()">{{ error() }}</p>
   <p class="message" *ngIf="message()">{{ message() }}</p>
 
+  <section class="panel fixed-expenses-panel">
+    <header>Checklist de gastos fijos del mes</header>
+    <div class="fixed-task-grid">
+      <article
+        class="fixed-task"
+        *ngFor="let task of data().fixed_tasks"
+        [class.paid]="task.paid"
+        [class.pending]="!task.paid"
+      >
+        <div>
+          <strong>
+            {{ task.label }}
+            <em class="task-badge" *ngIf="!task.paid">1</em>
+          </strong>
+          <span>{{ task.paid ? 'Cargado' : 'Pendiente' }}</span>
+        </div>
+        <small *ngIf="task.paid">
+          {{ fmtGs(task.total_gs) }} Gs · {{ task.last_date }} · {{ task.count }} registro(s)
+        </small>
+        <small *ngIf="!task.paid">Sin pago cargado en el mes seleccionado</small>
+      </article>
+    </div>
+  </section>
+
   <section class="panel form-panel">
-    <header>Registrar gasto</header>
+    <header>{{ editingId() ? 'Modificar gasto' : 'Registrar gasto' }}</header>
     <div class="form-grid expense-grid">
       <label>
         Fecha
@@ -72,7 +96,10 @@
       {{ status.message }}
     </p>
     <button type="button" class="primary-action" (click)="registrar()" [disabled]="saving()">
-      {{ saving() ? 'Registrando...' : 'Registrar gasto' }}
+      {{ saving() ? 'Guardando...' : (editingId() ? 'Guardar cambios' : 'Registrar gasto') }}
+    </button>
+    <button type="button" class="ghost-button" *ngIf="editingId()" (click)="cancelEdit()" [disabled]="saving()">
+      Cancelar edición
     </button>
   </section>
 
@@ -195,6 +222,7 @@
             <th>Referencia</th>
             <th>Descripcion</th>
             <th class="num">Monto</th>
+            <th>Accion</th>
           </tr>
         </thead>
         <tbody>
@@ -206,9 +234,14 @@
             <td>{{ row.referencia_pago || '-' }}</td>
             <td>{{ row.descripcion || '-' }}</td>
             <td class="num">{{ fmtGs(row.monto_gs) }}</td>
+            <td>
+              <button type="button" class="ghost-button compact" (click)="editExpense(row)">
+                Editar
+              </button>
+            </td>
           </tr>
           <tr *ngIf="data().rows.length === 0">
-            <td colspan="7" class="empty">Sin gastos en el rango.</td>
+            <td colspan="8" class="empty">Sin gastos en el rango.</td>
           </tr>
         </tbody>
       </table>

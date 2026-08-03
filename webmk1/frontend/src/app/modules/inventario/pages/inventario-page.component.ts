@@ -9,7 +9,7 @@ import { httpErrorMessage } from '../../../shared/http-error';
 import { fmtGs, fmtNumber } from '../../../shared/formatters';
 import { productPillClass } from '../../../shared/utils';
 import { InventarioService } from '../inventario.service';
-import { CompraSugeridaRow, InventoryPackageRow, InventoryRawRow, InventorySummary } from '../models/inventario.models';
+import { CompraSugeridaRow, InventoryFilmRow, InventoryPackageRow, InventoryRawRow, InventorySummary } from '../models/inventario.models';
 
 @Component({
   selector: 'app-inventario-page',
@@ -29,30 +29,42 @@ export class InventarioPageComponent implements OnInit {
 
   readonly loading = signal<boolean>(false);
   readonly savingAlerts = signal<boolean>(false);
+  readonly savingFilmAlerts = signal<boolean>(false);
   readonly savingAdjustments = signal<boolean>(false);
+  readonly savingWeeklyCount = signal<boolean>(false);
   readonly loadingSuggested = signal<boolean>(false);
   readonly alertsOpen = signal<boolean>(false);
+  readonly filmAlertsOpen = signal<boolean>(false);
   readonly adjustmentsOpen = signal<boolean>(false);
+  readonly weeklyCountOpen = signal<boolean>(false);
   readonly suggestedOpen = signal<boolean>(false);
   readonly error = signal<string>('');
   readonly message = signal<string>('');
   readonly summary = signal<InventorySummary>({
     raw_stock: [],
     package_stock: [],
+    film_stock: [],
     lotes_abiertos: [],
     raw_alerts_count: 0,
+    film_alerts_count: 0,
     total_raw_kg: 0,
     total_raw_valor_gs: 0,
     total_paquetes: 0,
     total_unidades: 0,
     total_venta_gs: 0,
+    total_film_rollos: 0,
   });
   alertForm: Record<number, number | null> = {};
   orderQtyForm: Record<number, number | null> = {};
   whatsappForm: Record<number, string> = {};
+  filmAlertForm: Record<string, number | null> = {};
   rawAdjustmentForm: Record<number, number | null> = {};
+  weeklyCountForm: Record<number, number | null> = {};
+  weeklyPackageCountForm: Record<string, number | null> = {};
   packageAdjustmentForm: Record<string, number | null> = {};
+  filmAdjustmentForm: Record<string, number | null> = {};
   adjustmentReason = 'Ajuste semanal';
+  weeklyCountReason = 'Conteo semanal';
   suggestedWindowDays = 30;
   suggestedTargetDays = 15;
   suggestedRows: CompraSugeridaRow[] = [];
@@ -69,6 +81,7 @@ export class InventarioPageComponent implements OnInit {
       next: (summary) => {
         this.summary.set(summary);
         this.syncAlertForm(summary);
+        this.syncFilmAlertForm(summary);
         this.syncAdjustmentForm(summary);
         this.loading.set(false);
       },
@@ -90,10 +103,33 @@ export class InventarioPageComponent implements OnInit {
     }
   }
 
+  openFilmAlerts(): void {
+    this.syncFilmAlertForm(this.summary());
+    this.filmAlertsOpen.set(true);
+  }
+
+  closeFilmAlerts(): void {
+    if (!this.savingFilmAlerts()) {
+      this.filmAlertsOpen.set(false);
+    }
+  }
+
   openAdjustments(): void {
     this.syncAdjustmentForm(this.summary());
     this.adjustmentReason = 'Ajuste semanal';
     this.adjustmentsOpen.set(true);
+  }
+
+  openWeeklyCount(): void {
+    this.syncWeeklyCountForm(this.summary());
+    this.weeklyCountReason = 'Conteo semanal';
+    this.weeklyCountOpen.set(true);
+  }
+
+  closeWeeklyCount(): void {
+    if (!this.savingWeeklyCount()) {
+      this.weeklyCountOpen.set(false);
+    }
   }
 
   closeAdjustments(): void {
@@ -144,6 +180,7 @@ export class InventarioPageComponent implements OnInit {
       next: (summary) => {
         this.summary.set(summary);
         this.syncAlertForm(summary);
+        this.syncFilmAlertForm(summary);
         this.syncAdjustmentForm(summary);
         this.savingAlerts.set(false);
         this.alertsOpen.set(false);
@@ -158,16 +195,48 @@ export class InventarioPageComponent implements OnInit {
     });
   }
 
+  saveFilmAlerts(): void {
+    const alerts = this.summary().film_stock.map((item) => ({
+      product_id: item.product_id,
+      gramaje: item.gramaje,
+      min_rollos: this.filmAlertValue(item),
+    }));
+    this.savingFilmAlerts.set(true);
+    this.error.set('');
+    this.message.set('');
+    this.service.updateFilmAlerts(alerts).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
+      next: (summary) => {
+        this.summary.set(summary);
+        this.syncAlertForm(summary);
+        this.syncFilmAlertForm(summary);
+        this.syncAdjustmentForm(summary);
+        this.savingFilmAlerts.set(false);
+        this.filmAlertsOpen.set(false);
+        this.message.set('Alertas de FILM actualizadas.');
+        window.dispatchEvent(new Event('raw-stock-alerts-changed'));
+      },
+      error: (err) => {
+        this.savingFilmAlerts.set(false);
+        this.error.set(httpErrorMessage(err, 'No se pudieron guardar las alertas de FILM'));
+      },
+    });
+  }
+
   saveAdjustments(): void {
     const payload = {
       raw_stock: this.summary().raw_stock.map((item) => ({
         product_id: item.product_id,
-        kg: this.positiveNumber(this.rawAdjustmentForm[item.product_id]),
+        kg: this.positiveNumber(this.rawAdjustmentForm[item.product_id]) * this.bagKg(item),
       })),
       package_stock: this.summary().package_stock.map((item) => ({
         product_id: item.product_id,
         gramaje: item.gramaje,
         paquetes: Math.trunc(this.positiveNumber(this.packageAdjustmentForm[this.packageKey(item)])),
+      })),
+      film_stock: this.summary().film_stock.map((item) => ({
+        product_id: item.product_id,
+        gramaje: item.gramaje,
+        rollos: Math.trunc(this.positiveNumber(this.filmAdjustmentForm[this.filmKey(item)])),
       })),
       motivo: this.adjustmentReason || 'Ajuste semanal',
     };
@@ -178,6 +247,7 @@ export class InventarioPageComponent implements OnInit {
       next: (summary) => {
         this.summary.set(summary);
         this.syncAlertForm(summary);
+        this.syncFilmAlertForm(summary);
         this.syncAdjustmentForm(summary);
         this.savingAdjustments.set(false);
         this.adjustmentsOpen.set(false);
@@ -188,6 +258,40 @@ export class InventarioPageComponent implements OnInit {
       error: (err) => {
         this.savingAdjustments.set(false);
         this.error.set(httpErrorMessage(err, 'No se pudo modificar inventario'));
+      },
+    });
+  }
+
+  saveWeeklyCount(): void {
+    const payload = {
+      raw_stock: this.summary().raw_stock.map((item) => ({
+        product_id: item.product_id,
+        sistema_kg: Number(item.kg || 0),
+        planta_bolsas: this.positiveNumber(this.weeklyCountForm[item.product_id]),
+        bolsa_kg: this.bagKg(item),
+      })),
+      package_stock: this.summary().package_stock.map((item) => ({
+        product_id: item.product_id,
+        gramaje: item.gramaje,
+        sistema_paquetes: Number(item.paquetes || 0),
+        planta_paquetes: Math.trunc(this.positiveNumber(this.weeklyPackageCountForm[this.packageKey(item)])),
+      })),
+      motivo: this.weeklyCountReason || 'Conteo semanal',
+    };
+    this.savingWeeklyCount.set(true);
+    this.error.set('');
+    this.message.set('');
+    this.service.saveWeeklyCount(payload).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
+      next: (summary) => {
+        this.summary.set(summary);
+        this.syncWeeklyCountForm(summary);
+        this.savingWeeklyCount.set(false);
+        this.weeklyCountOpen.set(false);
+        this.message.set('Conteo semanal guardado sin modificar inventario.');
+      },
+      error: (err) => {
+        this.savingWeeklyCount.set(false);
+        this.error.set(httpErrorMessage(err, 'No se pudo guardar el conteo semanal'));
       },
     });
   }
@@ -249,6 +353,21 @@ export class InventarioPageComponent implements OnInit {
     return `${item.product_id}:${item.gramaje}`;
   }
 
+  filmKey(item: Pick<InventoryFilmRow, 'product_id' | 'gramaje'>): string {
+    return `${item.product_id}:${item.gramaje}`;
+  }
+
+  filmMissing(item: InventoryFilmRow): number | string {
+    if (item.alerta_min_rollos == null) return '-';
+    return Math.max(0, item.alerta_min_rollos - item.rollos);
+  }
+
+  filmCoveragePct(item: InventoryFilmRow): number {
+    const min = Number(item.alerta_min_rollos || 0);
+    if (min <= 0) return item.rollos > 0 ? 100 : 0;
+    return Math.max(0, Math.min(100, (Number(item.rollos || 0) / min) * 100));
+  }
+
   suggestedKg(row: CompraSugeridaRow): number {
     return this.suggestedBags(row) * this.bagKg(row);
   }
@@ -260,6 +379,54 @@ export class InventarioPageComponent implements OnInit {
   currentBags(row: CompraSugeridaRow): number {
     const bagKg = this.bagKg(row);
     return bagKg > 0 ? Number(row.stock_kg || 0) / bagKg : 0;
+  }
+
+  currentRawBags(item: InventoryRawRow): number {
+    const bagKg = this.bagKg(item);
+    return bagKg > 0 ? Number(item.kg || 0) / bagKg : 0;
+  }
+
+  adjustedRawKg(item: InventoryRawRow): number {
+    return this.positiveNumber(this.rawAdjustmentForm[item.product_id]) * this.bagKg(item);
+  }
+
+  weeklyCountKg(item: InventoryRawRow): number {
+    return this.positiveNumber(this.weeklyCountForm[item.product_id]) * this.bagKg(item);
+  }
+
+  weeklyCountDiffKg(item: InventoryRawRow): number {
+    return this.weeklyCountKg(item) - Number(item.kg || 0);
+  }
+
+  weeklyCountDiffBags(item: InventoryRawRow): number {
+    const bagKg = this.bagKg(item);
+    return bagKg > 0 ? this.weeklyCountDiffKg(item) / bagKg : 0;
+  }
+
+  weeklyPackageCount(item: InventoryPackageRow): number {
+    return Math.trunc(this.positiveNumber(this.weeklyPackageCountForm[this.packageKey(item)]));
+  }
+
+  weeklyPackageCountDiff(item: InventoryPackageRow): number {
+    return this.weeklyPackageCount(item) - Number(item.paquetes || 0);
+  }
+
+  countDiffBags(item: InventoryRawRow): number | null {
+    if (item.conteo_diferencia_kg == null) return null;
+    const bagKg = this.bagKg(item);
+    return bagKg > 0 ? Number(item.conteo_diferencia_kg || 0) / bagKg : null;
+  }
+
+  countDiffClass(item: InventoryRawRow): string {
+    const diff = Number(item.conteo_diferencia_kg || 0);
+    if (item.conteo_diferencia_kg == null || Math.abs(diff) < 1e-9) return 'neutral';
+    return diff > 0 ? 'positive' : 'negative';
+  }
+
+  packageCountDiffClass(item: InventoryPackageRow): string {
+    const diff = Number(item.conteo_diferencia_paquetes || 0);
+    if (item.conteo_diferencia_paquetes == null || diff === 0) return 'neutral';
+    return diff > 0 ? 'positive' : 'negative';
   }
 
   objectiveBags(row: CompraSugeridaRow): number {
@@ -301,11 +468,29 @@ export class InventarioPageComponent implements OnInit {
     );
   }
 
+  private syncFilmAlertForm(summary: InventorySummary): void {
+    this.filmAlertForm = Object.fromEntries(
+      summary.film_stock.map((item) => [this.filmKey(item), item.alerta_min_rollos]),
+    );
+  }
+
   private syncAdjustmentForm(summary: InventorySummary): void {
     this.rawAdjustmentForm = Object.fromEntries(
-      summary.raw_stock.map((item) => [item.product_id, item.kg]),
+      summary.raw_stock.map((item) => [item.product_id, this.currentRawBags(item)]),
     );
     this.packageAdjustmentForm = Object.fromEntries(
+      summary.package_stock.map((item) => [this.packageKey(item), item.paquetes]),
+    );
+    this.filmAdjustmentForm = Object.fromEntries(
+      summary.film_stock.map((item) => [this.filmKey(item), item.rollos]),
+    );
+  }
+
+  private syncWeeklyCountForm(summary: InventorySummary): void {
+    this.weeklyCountForm = Object.fromEntries(
+      summary.raw_stock.map((item) => [item.product_id, this.currentRawBags(item)]),
+    );
+    this.weeklyPackageCountForm = Object.fromEntries(
       summary.package_stock.map((item) => [this.packageKey(item), item.paquetes]),
     );
   }
@@ -357,7 +542,14 @@ export class InventarioPageComponent implements OnInit {
     return Number.isFinite(value) && value > 0 ? value : null;
   }
 
-  private bagKg(item: { alerta_bolsa_kg?: number | null; producto: string }): number {
+  private filmAlertValue(item: InventoryFilmRow): number | null {
+    const raw = this.filmAlertForm[this.filmKey(item)];
+    if (raw === null || raw === undefined || raw === 0) return null;
+    const value = Math.trunc(Number(String(raw).replace(',', '.')));
+    return Number.isFinite(value) && value > 0 ? value : null;
+  }
+
+  bagKg(item: { alerta_bolsa_kg?: number | null; producto: string }): number {
     if (item.alerta_bolsa_kg) return Number(item.alerta_bolsa_kg);
     return item.producto.toLowerCase().includes('galleta') ? 25 : 50;
   }

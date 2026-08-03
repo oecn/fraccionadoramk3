@@ -37,6 +37,22 @@
   padding: 0;
 }
 
+.history-type-filter {
+  display: inline-flex;
+  grid-template: none;
+  align-items: center;
+  gap: 8px;
+  color: #314256;
+  font-size: 12px;
+  font-weight: 850;
+  white-space: nowrap;
+}
+
+.history-type-filter select {
+  width: 180px;
+  min-height: 34px;
+}
+
 .form-panel {
   padding-bottom: 16px;
 }

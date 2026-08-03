@@ -6,6 +6,7 @@ import { filter } from 'rxjs';
 
 import { dateOffset } from './shared/utils';
 import { CobrosFacturasService } from './modules/cobros-facturas/cobros-facturas.service';
+import { GastosEgresosService } from './modules/gastos-egresos/gastos-egresos.service';
 import { InventarioService } from './modules/inventario/inventario.service';
 import { OrdenesCompraService } from './modules/ordenes-compra/ordenes-compra.service';
 
@@ -20,6 +21,7 @@ import { OrdenesCompraService } from './modules/ordenes-compra/ordenes-compra.se
 export class AppComponent implements OnInit {
   private readonly destroyRef = inject(DestroyRef);
   private readonly cobrosFacturas = inject(CobrosFacturasService);
+  private readonly gastosEgresos = inject(GastosEgresosService);
   private readonly inventario = inject(InventarioService);
   private readonly ordenesCompra = inject(OrdenesCompraService);
   private readonly router = inject(Router);
@@ -28,29 +30,30 @@ export class AppComponent implements OnInit {
   readonly rawAlertsCount = signal<number>(0);
   readonly ocAlertsCount = signal<number>(0);
   readonly cobrosAlertsCount = signal<number>(0);
+  readonly gastosFijosPendingCount = signal<number>(0);
   readonly comprasOpen = signal<boolean>(false);
   readonly facturacionOpen = signal<boolean>(false);
   readonly stockOpen = signal<boolean>(false);
   readonly searchQuery = signal<string>('');
   readonly searchItems = [
     { label: 'Dashboard', route: '/' },
-    { label: 'Compra materia prima', route: '/compra-materia-prima' },
-    { label: 'Ordenes de compra', route: '/ordenes-compra' },
-    { label: 'Historial compras', route: '/historial-compras' },
     { label: 'Ventas paquetes', route: '/ventas-paquetes' },
-    { label: 'Historial ventas', route: '/historial-ventas' },
-    { label: 'Reportes ventas', route: '/reportes-ventas' },
+    { label: 'Fraccionamiento', route: '/fraccionamiento' },
+    { label: 'Rendimiento máquina', route: '/produccion' },
     { label: 'Inventario', route: '/inventario' },
     { label: 'Productos', route: '/productos' },
-    { label: 'Fraccionamiento', route: '/fraccionamiento' },
-    { label: 'Rendimiento maquina', route: '/produccion' },
+    { label: 'Compra materia prima', route: '/compra-materia-prima' },
+    { label: 'Órdenes de compra', route: '/ordenes-compra' },
+    { label: 'Historial compras', route: '/historial-compras' },
     { label: 'Cobros facturas', route: '/cobros-facturas' },
     { label: 'Flujo de dinero', route: '/flujo-dinero' },
     { label: 'Chequeras', route: '/chequeras' },
     { label: 'Gastos y egresos', route: '/gastos-egresos' },
-    { label: 'Resumenes', route: '/resumenes' },
-    { label: 'Analisis', route: '/analisis' },
-    { label: 'Estadisticas', route: '/estadisticas' },
+    { label: 'Historial ventas', route: '/historial-ventas' },
+    { label: 'Reportes ventas', route: '/reportes-ventas' },
+    { label: 'Estadísticas', route: '/estadisticas' },
+    { label: 'Análisis', route: '/analisis' },
+    { label: 'Resúmenes', route: '/resumenes' },
   ];
   readonly searchResults = computed(() => {
     const query = this.searchQuery().trim().toLowerCase();
@@ -141,10 +144,30 @@ export class AppComponent implements OnInit {
     });
   }
 
+  loadGastosFijosPendingCount(): void {
+    const now = new Date();
+    const first = new Date(now.getFullYear(), now.getMonth(), 1);
+    const last = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+    const fromDate = this.toIsoDate(first);
+    const toDate = this.toIsoDate(last);
+    this.gastosEgresos.getSummary(fromDate, toDate).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
+      next: (summary) => this.gastosFijosPendingCount.set((summary.fixed_tasks || []).filter((task) => !task.paid).length),
+      error: () => this.gastosFijosPendingCount.set(0),
+    });
+  }
+
   loadAlertCounts(): void {
     this.loadRawAlertsCount();
     this.loadOcAlertsCount();
     this.loadCobrosAlertsCount();
+    this.loadGastosFijosPendingCount();
+  }
+
+  private toIsoDate(date: Date): string {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
   }
 
   @HostListener('document:click', ['$event'])
@@ -171,5 +194,10 @@ export class AppComponent implements OnInit {
   @HostListener('window:cobros-facturas-alerts-changed')
   onCobrosFacturasAlertsChanged(): void {
     this.loadCobrosAlertsCount();
+  }
+
+  @HostListener('window:gastos-egresos-alerts-changed')
+  onGastosEgresosAlertsChanged(): void {
+    this.loadGastosFijosPendingCount();
   }
 }

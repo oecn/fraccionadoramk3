@@ -500,6 +500,11 @@ class OrdenesCompraRepository:
 
         monto_total = meta.get("monto_total")
         with connection("pedidos") as cn:
+            exists_row = cn.execute(
+                "SELECT id FROM orden_compra WHERE nro_oc = %s",
+                (nro_oc,),
+            ).fetchone()
+            created = exists_row is None
             row = cn.execute(
                 """
                 INSERT INTO orden_compra (nro_oc, sucursal, fecha_pedido, raw_text, monto_total)
@@ -550,7 +555,12 @@ class OrdenesCompraRepository:
             fecha_pedido=meta.get("fecha_pedido") or "",
             monto_total=float(monto_total) if monto_total is not None else None,
             items=items,
-            message=f"OC {nro_oc} importada con {len(items)} items.",
+            message=(
+                f"OC {nro_oc} importada con {len(items)} items."
+                if created
+                else f"OC {nro_oc} ya existia. Fue actualizada con {len(items)} items."
+            ),
+            created=created,
         )
 
     def delete(self, oc_id: int) -> OrdenCompraDeleteResponse:

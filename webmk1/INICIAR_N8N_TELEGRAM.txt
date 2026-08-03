@@ -1,0 +1,336 @@
+GUIA PARA INICIAR N8N + TELEGRAM + WEBMK1
+
+Objetivo:
+Recibir PDFs de ordenes de compra por Telegram, descargarlos con n8n,
+enviarlos al backend webmk1, parsearlos con el parser normal y guardar la OC.
+
+
+1) INICIAR BACKEND WEBMK1
+
+Abrir PowerShell:
+
+    cd C:\Users\osval\Desktop\dev\PDFREADER\GCPDFMK102-POSTGRES\webmk1\backend
+    .\.venv\Scripts\python.exe -m uvicorn main:app --reload --host 0.0.0.0 --port 8011
+
+Debe quedar abierto.
+
+Probar en navegador:
+
+    http://127.0.0.1:8011/docs
+
+
+2) INICIAR FRONTEND WEBMK1
+
+Abrir otra PowerShell:
+
+    cd C:\Users\osval\Desktop\dev\PDFREADER\GCPDFMK102-POSTGRES\webmk1\frontend
+    & "C:\Program Files\nodejs\npm.cmd" run start -- --host 0.0.0.0 --port 4300
+
+Abrir:
+
+    http://localhost:4300
+
+
+3) INICIAR NGROK PARA N8N
+
+Abrir otra PowerShell:
+
+    ngrok http 5678
+
+Copiar la URL HTTPS que aparece en Forwarding.
+
+Ejemplo:
+
+    https://resource-grove-overhand.ngrok-free.dev
+
+Dejar esta terminal abierta.
+
+Nota:
+Con ngrok gratis, si se cierra ngrok puede cambiar la URL.
+Si cambia, hay que reiniciar n8n usando la URL nueva.
+
+
+4) INICIAR N8N CON WEBHOOK_URL
+
+Abrir otra PowerShell:
+
+    $env:WEBHOOK_URL="https://resource-grove-overhand.ngrok-free.dev"
+    npx n8n start
+
+Usar la URL real de ngrok.
+
+Abrir n8n desde:
+
+    https://resource-grove-overhand.ngrok-free.dev
+
+Tambien puede abrir local:
+
+    http://localhost:5678
+
+
+5) WORKFLOW PDF TELEGRAM
+
+El workflow debe tener estos nodos:
+
+    Telegram Trigger
+    -> Telegram Get File
+    -> HTTP Request
+    -> Telegram Send Message
+
+
+5.1) Telegram Trigger
+
+Configuracion:
+
+    Resource/Trigger: Message
+    Credential: Telegram account
+
+Este nodo recibe mensajes y PDFs enviados al bot.
+
+
+5.2) Telegram Get File
+
+Configuracion:
+
+    Resource: File
+    Operation: Get
+    File ID:
+        {{$json.message.document.file_id}}
+    Download:
+        ON
+
+El PDF queda como binario en:
+
+    data
+
+
+5.3) HTTP Request para parsear y guardar OC
+
+Configuracion:
+
+    Method: POST
+    URL: http://127.0.0.1:8011/telegram/pedidos/pdf
+    Authentication: None
+    Send Body: ON
+    Body Content Type: Form-Data
+
+Body:
+
+    Type: n8n Binary File
+    Name: file
+    Input Data Field Name: data
+
+No agregar campos vacios extras.
+
+Respuesta esperada:
+
+    ok
+    tipo
+    telegram_message
+    orden
+
+
+5.4) Telegram Send Message
+
+Configuracion:
+
+    Resource: Message
+    Operation: Send Message
+    Chat ID:
+        {{$node["Telegram Trigger"].json["message"]["chat"]["id"]}}
+    Text:
+        {{$json.telegram_message}}
+
+Additional Fields:
+
+    No agregar Parse Mode.
+
+Si se usa Parse Mode HTML/Markdown, Telegram puede fallar por caracteres
+de los productos como *, _, < o >.
+
+
+6) PUBLICAR WORKFLOW PDF
+
+Para que funcione automatico:
+
+    Clic en Publish
+
+Cuando esta Published:
+
+    NO usar Execute workflow.
+
+Para probar automatico:
+
+    Enviar PDF al bot desde Telegram.
+    Revisar la pestana Executions en n8n.
+
+Si necesitas probar manualmente:
+
+    Unpublish
+    Execute workflow
+    Probar
+    Publish otra vez
+
+
+7) QUE PASA AL ENVIAR UNA OC
+
+Si la OC es nueva:
+
+    Se crea en orden_compra y orden_item.
+    Queda pendiente.
+    Aparece en la web al refrescar la pantalla.
+
+Si la OC ya existia:
+
+    Se actualiza la misma OC por nro_oc.
+    Se reemplazan sus items.
+    No se duplica.
+
+El bot responde con resumen:
+
+    Pedido importado correctamente.
+    OC: 170933
+    Sucursal: CENTRAL
+    Fecha: 2026-07-17
+    Items: 7
+    Total: 9.647.500 Gs
+
+
+8) ENDPOINTS AGREGADOS EN WEBMK1
+
+Importar PDF desde n8n/Telegram:
+
+    POST http://127.0.0.1:8011/telegram/pedidos/pdf
+
+Resumen diario:
+
+    GET http://127.0.0.1:8011/telegram/resumen-diario
+
+
+9) WORKFLOW RESUMEN DIARIO
+
+Crear otro workflow separado.
+
+Nodos:
+
+    Schedule Trigger
+    -> HTTP Request
+    -> Telegram Send Message
+
+
+9.1) Schedule Trigger
+
+Ejemplo para todos los dias a las 18:00:
+
+    Trigger Interval: Days
+    Days Between Triggers: 1
+    Trigger at Hour: 18 / 6 PM
+    Trigger at Minute: 0
+
+
+9.2) HTTP Request
+
+Configuracion:
+
+    Method: GET
+    URL: http://127.0.0.1:8011/telegram/resumen-diario
+    Authentication: None
+    Send Body: OFF
+
+Respuesta esperada:
+
+    ok
+    telegram_message
+
+
+9.3) Telegram Send Message para resumen diario
+
+Configuracion:
+
+    Resource: Message
+    Operation: Send Message
+    Chat ID:
+        1056782226
+    Text:
+        {{$json.telegram_message}}
+
+Additional Fields:
+
+    No agregar Parse Mode.
+
+
+10) RESUMEN DIARIO: CONTENIDO
+
+El mensaje incluye:
+
+    OCs importadas hoy
+    OCs pendientes
+    OCs entregadas
+    Total pendiente
+    OCs con faltantes
+    OCs criticas con menos de 50% listo
+    Pendientes por sucursal
+    Top 5 pendientes principales
+
+
+11) PROBLEMAS COMUNES
+
+Error:
+
+    The service refused the connection
+
+Solucion:
+
+    Backend apagado o URL incorrecta.
+    Usar http://127.0.0.1:8011, no localhost.
+
+
+Error:
+
+    Not Found
+
+Solucion:
+
+    Reiniciar backend para que tome endpoints nuevos.
+
+
+Error:
+
+    Telegram can't parse entities
+
+Solucion:
+
+    Borrar Parse Mode en Telegram Send Message.
+
+
+Error:
+
+    n8n can't listen for test executions while published
+
+Solucion:
+
+    Si esta Published, probar enviando mensajes reales y mirar Executions.
+    Para test manual, usar Unpublish.
+
+
+Error:
+
+    HTTPS URL must be provided for webhook
+
+Solucion:
+
+    Iniciar ngrok y arrancar n8n con WEBHOOK_URL=https://...
+
+
+12) TERMINALES QUE DEBEN QUEDAR ABIERTAS
+
+Para que todo funcione:
+
+    1. Backend webmk1 puerto 8011
+    2. Frontend webmk1 puerto 4300
+    3. ngrok puerto 5678
+    4. n8n con WEBHOOK_URL
+
+El frontend no es necesario para que n8n importe OCs, pero si para verlas
+en la web.
+

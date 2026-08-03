@@ -116,6 +116,30 @@ class FlujoDineroRepository:
         except Exception:
             return {}
 
+    def _ensure_raw_lots_tax(self) -> None:
+        try:
+            with connection("fraccionadora") as cn:
+                cn.execute("ALTER TABLE raw_lots ADD COLUMN IF NOT EXISTS gravada5_gs REAL NOT NULL DEFAULT 0")
+                cn.execute("ALTER TABLE raw_lots ADD COLUMN IF NOT EXISTS iva5_gs REAL NOT NULL DEFAULT 0")
+                cn.execute("ALTER TABLE raw_lots ADD COLUMN IF NOT EXISTS gravada10_gs REAL NOT NULL DEFAULT 0")
+                cn.execute("ALTER TABLE raw_lots ADD COLUMN IF NOT EXISTS iva10_gs REAL NOT NULL DEFAULT 0")
+                cn.execute("ALTER TABLE raw_lots ADD COLUMN IF NOT EXISTS exenta_gs REAL NOT NULL DEFAULT 0")
+                cn.execute(
+                    """
+                    UPDATE raw_lots
+                       SET gravada5_gs = costo_total_gs / 1.05,
+                           iva5_gs = costo_total_gs - (costo_total_gs / 1.05)
+                     WHERE COALESCE(costo_total_gs, 0) > 0
+                       AND COALESCE(gravada5_gs, 0) = 0
+                       AND COALESCE(iva5_gs, 0) = 0
+                       AND COALESCE(gravada10_gs, 0) = 0
+                       AND COALESCE(iva10_gs, 0) = 0
+                       AND COALESCE(exenta_gs, 0) = 0
+                    """
+                )
+        except Exception:
+            return
+
     def available_years(self) -> list[int]:
         years: set[int] = set()
         for table in ("sales_invoices", "raw_lots", "bag_sales", "expenses", "credit_notes"):
@@ -149,6 +173,7 @@ class FlujoDineroRepository:
         selected_quarter = (quarter or "Todos").strip()
         if selected_quarter not in {"Todos", "T1", "T2", "T3", "T4"}:
             selected_quarter = "Todos"
+        self._ensure_raw_lots_tax()
 
         ventas_gross = self._monthly_sum("sales_invoices", "total_gs", selected_year, from_date, to_date)
         ventas_sin_iva = self._monthly_sum(
@@ -171,7 +196,15 @@ class FlujoDineroRepository:
             ventas_sin_iva[month_no] = ventas_sin_iva.get(month_no, 0.0) + amount
             ventas_retencion[month_no] = ventas_retencion.get(month_no, 0.0) + amount
 
-        compras = self._monthly_sum("raw_lots", "costo_total_gs", selected_year, from_date, to_date)
+        compras_gross = self._monthly_sum("raw_lots", "costo_total_gs", selected_year, from_date, to_date)
+        compras_sin_iva = self._monthly_sum(
+            "raw_lots",
+            "costo_total_gs - COALESCE(iva5_gs, 0) - COALESCE(iva10_gs, 0)",
+            selected_year,
+            from_date,
+            to_date,
+        )
+        compras = compras_gross if include_iva else compras_sin_iva
         gastos = self._monthly_sum_optional("expenses", "monto_gs", selected_year, from_date, to_date)
         notas_credito_gross = self._monthly_sum_optional("credit_notes", "total_gs", selected_year, from_date, to_date)
         notas_credito_sin_iva = self._monthly_sum_optional(

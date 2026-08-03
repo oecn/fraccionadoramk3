@@ -9,7 +9,7 @@ import { httpErrorMessage } from '../../../shared/http-error';
 import { fmtGs } from '../../../shared/formatters';
 import { dateOffset, todayIso } from '../../../shared/utils';
 import { GastosEgresosService } from '../gastos-egresos.service';
-import { CheckStatus, ExpenseCreate, ExpenseSummary, IpsParseResult, RrhhParseResult } from '../models/gastos-egresos.models';
+import { CheckStatus, ExpenseCreate, ExpenseRow, ExpenseSummary, IpsParseResult, RrhhParseResult } from '../models/gastos-egresos.models';
 
 @Component({
   selector: 'app-gastos-egresos-page',
@@ -24,7 +24,7 @@ export class GastosEgresosPageComponent implements OnInit {
   private readonly service = inject(GastosEgresosService);
   readonly fmtGs = fmtGs;
 
-  readonly data = signal<ExpenseSummary>({ rows: [], total_gs: 0, tipos: [], formas_pago: [] });
+  readonly data = signal<ExpenseSummary>({ rows: [], total_gs: 0, tipos: [], formas_pago: [], fixed_tasks: [] });
   readonly loading = signal<boolean>(false);
   readonly saving = signal<boolean>(false);
   readonly parsingIps = signal<boolean>(false);
@@ -34,6 +34,7 @@ export class GastosEgresosPageComponent implements OnInit {
   readonly error = signal<string>('');
   readonly message = signal<string>('');
   readonly checkStatus = signal<CheckStatus | null>(null);
+  readonly editingId = signal<number | null>(null);
   readonly ipsPreview = signal<IpsParseResult | null>(null);
   readonly rrhhPreview = signal<RrhhParseResult | null>(null);
   readonly ipsFileName = signal<string>('');
@@ -89,6 +90,7 @@ export class GastosEgresosPageComponent implements OnInit {
         this.data.set(data);
         if (!this.form.tipo && data.tipos.length) this.form.tipo = data.tipos[0];
         this.loading.set(false);
+        window.dispatchEvent(new Event('gastos-egresos-alerts-changed'));
       },
       error: (err) => {
         this.loading.set(false);
@@ -132,32 +134,66 @@ export class GastosEgresosPageComponent implements OnInit {
   registrar(): void {
     if (this.form.forma_pago === 'Cheque') {
       const status = this.checkStatus();
-      if (!status?.available) {
+      if (status?.available) {
+        this.form.referencia_pago = status.referencia;
+      } else if (!this.editingId() || !this.form.referencia_pago.trim()) {
         this.error.set('Valide un cheque disponible antes de registrar.');
         return;
       }
-      this.form.referencia_pago = status.referencia;
     }
     this.saving.set(true);
     this.error.set('');
     this.message.set('');
-    this.service.create(this.form).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
+    const editingId = this.editingId();
+    const request = editingId ? this.service.update(editingId, this.form) : this.service.create(this.form);
+    request.pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: (row) => {
         this.saving.set(false);
-        this.message.set(`Gasto registrado: ${row.tipo} ${this.fmtGs(row.monto_gs)} Gs.`);
-        this.form.descripcion = '';
-        this.form.monto_gs = 0;
-        this.form.nro_factura = '';
-        this.form.referencia_pago = '';
-        this.cheque = { serie: '', numero: '' };
-        this.checkStatus.set(null);
+        this.message.set(`Gasto ${editingId ? 'actualizado' : 'registrado'}: ${row.tipo} ${this.fmtGs(row.monto_gs)} Gs.`);
+        this.resetForm();
         this.refresh();
+        window.dispatchEvent(new Event('gastos-egresos-alerts-changed'));
       },
       error: (err) => {
         this.saving.set(false);
         this.error.set(httpErrorMessage(err, 'No se pudo registrar el gasto'));
       },
     });
+  }
+
+  editExpense(row: ExpenseRow): void {
+    this.editingId.set(row.id);
+    this.form = {
+      fecha: row.fecha,
+      tipo: row.tipo,
+      descripcion: row.descripcion,
+      monto_gs: row.monto_gs,
+      nro_factura: row.nro_factura,
+      forma_pago: row.forma_pago,
+      referencia_pago: row.referencia_pago,
+    };
+    this.cheque = { serie: '', numero: '' };
+    this.checkStatus.set(null);
+    this.error.set('');
+    this.message.set(`Editando gasto #${row.id}.`);
+  }
+
+  cancelEdit(): void {
+    this.resetForm();
+    this.message.set('');
+    this.error.set('');
+  }
+
+  private resetForm(): void {
+    this.editingId.set(null);
+    this.form.descripcion = '';
+    this.form.monto_gs = 0;
+    this.form.nro_factura = '';
+    this.form.referencia_pago = '';
+    this.form.fecha = todayIso();
+    this.form.forma_pago = 'Efectivo';
+    this.cheque = { serie: '', numero: '' };
+    this.checkStatus.set(null);
   }
 
   referenceLabel(): string {
@@ -210,6 +246,7 @@ export class GastosEgresosPageComponent implements OnInit {
         this.message.set(`${res.message} Insertados: ${res.inserted}, omitidos: ${res.skipped}.`);
         this.ipsPreview.set(null);
         this.refresh();
+        window.dispatchEvent(new Event('gastos-egresos-alerts-changed'));
       },
       error: (err) => {
         this.importingIps.set(false);
@@ -251,6 +288,7 @@ export class GastosEgresosPageComponent implements OnInit {
         this.message.set(`${res.message} Insertados: ${res.inserted}, omitidos: ${res.skipped}.`);
         this.rrhhPreview.set(null);
         this.refresh();
+        window.dispatchEvent(new Event('gastos-egresos-alerts-changed'));
       },
       error: (err) => {
         this.importingRrhh.set(false);

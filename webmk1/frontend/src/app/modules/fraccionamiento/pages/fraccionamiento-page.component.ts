@@ -44,6 +44,7 @@ export class FraccionamientoPageComponent implements OnInit {
   readonly message = signal<string>('');
   readonly editing = signal<FraccionamientoHistoryRow | null>(null);
   showOnlyPackageStock = true;
+  historyProductTypeId: number | null = null;
 
   form: FraccionamientoCreate = {
     product_id: null,
@@ -242,5 +243,12 @@ export class FraccionamientoPageComponent implements OnInit {
           return row || { product_id: producto.id, producto: producto.name, gramaje, paquetes: 0 };
         }),
       );
+  }
+
+  historyRows(summary: FraccionamientoSummary): FraccionamientoHistoryRow[] {
+    if (!this.historyProductTypeId) {
+      return summary.history;
+    }
+    return summary.history.filter((row) => row.product_id === this.historyProductTypeId);
   }
 }

@@ -40,6 +40,7 @@ export class CompraMateriaPrimaPageComponent implements OnInit {
   readonly parsingFactura = signal<boolean>(false);
   readonly importingFactura = signal<boolean>(false);
   readonly deletingLote = signal<boolean>(false);
+  readonly reviewingPrice = signal<number | null>(null);
   readonly deleteDialogOpen = signal<boolean>(false);
   readonly loteToDelete = signal<LoteAbiertoRow | null>(null);
   readonly error = signal<string>('');
@@ -54,6 +55,7 @@ export class CompraMateriaPrimaPageComponent implements OnInit {
 
   form: CompraMateriaPrimaCreate = {
     product_id: null,
+    fecha: this.today(),
     lote: '',
     proveedor: '',
     factura: '',
@@ -65,6 +67,10 @@ export class CompraMateriaPrimaPageComponent implements OnInit {
   useCustomBagKg = false;
   deleteForm = {
     motivo: '',
+  };
+  priceReviewForm = {
+    revisado_por: 'Admin',
+    estado: 'Revisado y OK',
   };
 
   ngOnInit(): void {
@@ -186,6 +192,11 @@ export class CompraMateriaPrimaPageComponent implements OnInit {
         descripcion: item.descripcion,
         kg: item.kg,
         total_linea: item.total_linea,
+        gravada5_gs: item.gravada5_gs,
+        iva5_gs: item.iva5_gs,
+        gravada10_gs: item.gravada10_gs,
+        iva10_gs: item.iva10_gs,
+        exenta_gs: item.exenta_gs,
         bolsa_kg: item.bolsa_kg,
         bolsas: item.bolsas,
       })),
@@ -218,6 +229,10 @@ export class CompraMateriaPrimaPageComponent implements OnInit {
     this.form.bolsa_kg = this.useCustomBagKg ? null : 50;
   }
 
+  private today(): string {
+    return new Date().toISOString().slice(0, 10);
+  }
+
   kgTotal(): number {
     return Number(this.form.bolsa_kg || 0) * Number(this.form.bolsas || 0);
   }
@@ -225,6 +240,75 @@ export class CompraMateriaPrimaPageComponent implements OnInit {
   costoKg(): number {
     const kg = this.kgTotal();
     return kg > 0 ? Number(this.form.costo_total_gs || 0) / kg : 0;
+  }
+
+  selectedProductLastCost(): number | null {
+    const productId = this.form.product_id;
+    if (!productId) return null;
+    return this.options().productos.find((p) => p.id === productId)?.ultimo_costo_kg_gs ?? null;
+  }
+
+  manualPriceVariationPct(): number | null {
+    return this.priceVariationPct(this.costoKg(), this.selectedProductLastCost());
+  }
+
+  priceVariationPct(current: number, previous: number | null | undefined): number | null {
+    if (!previous || previous <= 0 || !current) return null;
+    return ((Number(current) - Number(previous)) / Number(previous)) * 100;
+  }
+
+  priceToneClass(value: number | null | undefined): string {
+    if (value === null || value === undefined) return 'neutral';
+    if (value > 0.01) return 'up';
+    if (value < -0.01) return 'down';
+    return 'same';
+  }
+
+  priceToneLabel(value: number | null | undefined): string {
+    if (value === null || value === undefined) return 'Sin compra anterior';
+    if (value > 0.01) return `Subió ${Math.abs(value).toFixed(1)}%`;
+    if (value < -0.01) return `Bajó ${Math.abs(value).toFixed(1)}%`;
+    return 'Sin variación';
+  }
+
+  pendingPriceAlerts(): LoteAbiertoRow[] {
+    return this.summary()?.lotes_abiertos.filter((row) => row.precio_cambio_detectado) || [];
+  }
+
+  priceChangeMessage(row: LoteAbiertoRow): string {
+    return `Se ha detectado un cambio de precios. Favor revisar ${row.producto} y realizar cambio de precio de ser necesario.`;
+  }
+
+  importFacturaPriceAlerts(): number {
+    return this.facturaPreview()?.items.filter((item) => item.importable && item.variacion_costo_pct !== null && Math.abs(item.variacion_costo_pct || 0) > 0.01).length || 0;
+  }
+
+  priceImpactLabel(row: LoteAbiertoRow): string {
+    return `Diferencia ${this.fmtGs(row.diferencia_costo_kg_gs)} / kg; impacto lote ${this.fmtGs(row.diferencia_costo_total_gs)} Gs`;
+  }
+
+  pctLabel(value: number | null | undefined): string {
+    return value === null || value === undefined ? '-' : `${Number(value).toFixed(1)}%`;
+  }
+
+  markPriceReviewed(row: LoteAbiertoRow, estado = this.priceReviewForm.estado): void {
+    this.reviewingPrice.set(row.id);
+    this.error.set('');
+    this.message.set('');
+    this.service.marcarPrecioRevisado(row.id, {
+      estado,
+      revisado_por: this.priceReviewForm.revisado_por,
+    }).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
+      next: (res) => {
+        this.reviewingPrice.set(null);
+        this.message.set(res.message);
+        this.refresh();
+      },
+      error: (err) => {
+        this.reviewingPrice.set(null);
+        this.error.set(httpErrorMessage(err, 'No se pudo marcar el precio como revisado'));
+      },
+    });
   }
 
   openDeleteDialog(row: LoteAbiertoRow): void {

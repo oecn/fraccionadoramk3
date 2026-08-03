@@ -19,6 +19,7 @@ from modules.produccion import router as produccion_router
 from modules.productos import router as productos_router
 from modules.reportes_ventas import router as reportes_ventas_router
 from modules.resumenes import router as resumenes_router
+from modules.telegram import router as telegram_router
 from modules.ventas_paquetes import router as ventas_paquetes_router
 
 
@@ -56,4 +57,5 @@ app.include_router(produccion_router.router)
 app.include_router(productos_router.router)
 app.include_router(reportes_ventas_router.router)
 app.include_router(resumenes_router.router)
+app.include_router(telegram_router.router)
 app.include_router(ventas_paquetes_router.router)

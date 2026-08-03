@@ -4,6 +4,14 @@ export type Kpi = {
   subtitle: string;
 };
 
+export type MonthMovementSummary = {
+  compras_gs: number;
+  ventas_gs: number;
+  gastos_gs: number;
+  notas_credito_gs: number;
+  resultado_gs: number;
+};
+
 export type OrderRow = {
   oc_id: number;
   numero: string;
@@ -121,6 +129,7 @@ export type PaymentReceiptUpdateResponse = {
 
 export type CollectionRow = {
   invoice_id: number;
+  invoice_source: string;
   ts: string;
   invoice_no: string;
   customer: string;
@@ -134,13 +143,29 @@ export type CollectionRow = {
   dias_para_cobro: number | null;
 };
 
+export type PriceAlertRow = {
+  lot_id: number;
+  product_id: number;
+  producto: string;
+  proveedor: string;
+  factura: string;
+  estado: string;
+  costo_kg_anterior_gs: number | null;
+  costo_kg_gs: number;
+  diferencia_costo_kg_gs: number;
+  variacion_costo_pct: number | null;
+  ts: string;
+};
+
 export type DashboardSummary = {
   kpis: Kpi[];
   orders: OrderRow[];
   payments: PaymentRow[];
   collections: CollectionRow[];
+  price_alerts: PriceAlertRow[];
   trend_7: number;
   trend_30: number;
+  month_summary: MonthMovementSummary;
   updated_at: string;
   source: string;
 };

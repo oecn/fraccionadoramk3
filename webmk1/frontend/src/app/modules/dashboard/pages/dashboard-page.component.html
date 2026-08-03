@@ -26,6 +26,29 @@
       </article>
     </section>
 
+    <section class="price-alert-panel" *ngIf="d.price_alerts.length > 0">
+      <header>
+        <strong>Se detectaron cambios de precio en materia prima</strong>
+        <span>{{ d.price_alerts.length }} pendiente(s)</span>
+      </header>
+      <div class="price-alert-list">
+        <article *ngFor="let row of d.price_alerts">
+          <div>
+            <strong>{{ row.producto }}</strong>
+            <span>
+              {{ row.estado }} / anterior {{ fmtGs(row.costo_kg_anterior_gs || 0) }} / kg,
+              nuevo {{ fmtGs(row.costo_kg_gs) }} / kg,
+              dif. {{ fmtGs(row.diferencia_costo_kg_gs) }} / kg.
+            </span>
+          </div>
+          <nav>
+            <a class="link-action compact" href="/compra-materia-prima">Revisar compra</a>
+            <a class="link-action compact muted" href="/productos">Ir a cambiar precio</a>
+          </nav>
+        </article>
+      </div>
+    </section>
+
     <section class="filters-panel">
       <div class="filters-heading">
         <h2>Filtros y resumen operativo</h2>
@@ -190,7 +213,7 @@
                 <td>
                   <input
                     type="checkbox"
-                    [ngModel]="selectedCollections()[row.invoice_id]"
+                    [ngModel]="selectedCollections()[collectionKey(row)]"
                     (ngModelChange)="toggleCollection(row, $event)"
                   >
                 </td>
@@ -220,10 +243,46 @@
       </article>
 
       <article class="panel trend">
-        <header>Tendencia</header>
-        <p>Pendientes ultimos 7 dias: <strong>{{ d.trend_7 }}</strong></p>
-        <p>Pendientes ultimos 30 dias: <strong>{{ d.trend_30 }}</strong></p>
-        <small>Compromiso estimado: fecha pedido + 2 dias / credito + 15 dias</small>
+        <header>Dinero mes actual</header>
+        <div class="month-chart-wrap">
+          <svg
+            class="month-money-chart"
+            [attr.viewBox]="'0 0 ' + monthChart.width + ' ' + monthChart.height"
+            role="img"
+            [attr.aria-label]="'Grafico de dinero del mes actual ' + currentMonthLabel()"
+          >
+            <line class="axis" [attr.x1]="monthChart.left" [attr.x2]="monthChart.width - monthChart.right" [attr.y1]="monthChart.height - monthChart.bottom" [attr.y2]="monthChart.height - monthChart.bottom"></line>
+            <line class="grid-line" [attr.x1]="monthChart.left" [attr.x2]="monthChart.width - monthChart.right" [attr.y1]="monthChart.top + 70" [attr.y2]="monthChart.top + 70"></line>
+            <ng-container *ngFor="let bar of monthMoneyBars(d.month_summary)">
+              <rect
+                class="chart-bar"
+                [ngClass]="bar.className"
+                [attr.x]="bar.x"
+                [attr.y]="monthChartY(bar.value, d.month_summary)"
+                [attr.width]="bar.width"
+                [attr.height]="monthBarHeight(bar.value, d.month_summary)"
+                rx="6"
+              ></rect>
+              <text class="bar-label" [attr.x]="bar.x + bar.width / 2" [attr.y]="monthChartY(bar.value, d.month_summary) - 7" text-anchor="middle">{{ monthBarLabel(bar.value) }}</text>
+              <text class="month-label" [attr.x]="bar.x + bar.width / 2" [attr.y]="monthChart.height - 14" text-anchor="middle">{{ bar.short }}</text>
+            </ng-container>
+            <line
+              class="result-line"
+              x1="54"
+              x2="326"
+              [attr.y1]="monthChartY(d.month_summary.resultado_gs, d.month_summary)"
+              [attr.y2]="monthChartY(d.month_summary.resultado_gs, d.month_summary)"
+            ></line>
+            <text class="bar-label result-label" x="326" [attr.y]="monthChartY(d.month_summary.resultado_gs, d.month_summary) - 8" text-anchor="end">{{ monthBarLabel(d.month_summary.resultado_gs) }}</text>
+          </svg>
+        </div>
+        <small class="month-chart-caption">{{ currentMonthLabel() }}</small>
+        <p class="month-result">
+          Resultado:
+          <strong [ngClass]="'result-' + resultTone(d.month_summary.resultado_gs)">
+            {{ signedGs(d.month_summary.resultado_gs) }}
+          </strong>
+        </p>
         <footer>Actualizado: {{ d.updated_at }} | Fuente: {{ d.source }}</footer>
       </article>
     </section>
@@ -488,5 +547,50 @@
         </button>
       </footer>
     </article>
+  </section>
+  <section class="panel production-chart" *ngIf="productionTrend().length">
+    <div class="production-chart-heading">
+      <div>
+        <h2>Producción mensual</h2>
+        <p>Cantidad producida por máquina durante los últimos 12 meses.</p>
+      </div>
+      <div class="chart-legend" aria-label="Series del gráfico">
+        <span class="m1">Máquina 1</span>
+        <span class="m2">Máquina 2</span>
+        <span class="total">Total</span>
+      </div>
+    </div>
+    <div class="chart-scroll">
+      <svg class="line-chart" viewBox="0 0 1000 285" role="img" aria-label="Línea de tiempo de producción mensual">
+        <line x1="55" y1="45" x2="55" y2="235" class="chart-axis" />
+        <line x1="55" y1="235" x2="955" y2="235" class="chart-axis" />
+        <line x1="55" y1="140" x2="955" y2="140" class="chart-grid" />
+        <line x1="55" y1="45" x2="955" y2="45" class="chart-grid" />
+        <polyline [attr.points]="productionPoints('total_unidades')" class="chart-line total" />
+        <polyline [attr.points]="productionPoints('maquina1_unidades')" class="chart-line m1" />
+        <polyline [attr.points]="productionPoints('maquina2_unidades')" class="chart-line m2" />
+        <g *ngFor="let row of productionTrend(); let i = index">
+          <text [attr.x]="productionX(i)" y="258" class="chart-label">{{ productionMonthLabel(row) }}</text>
+          <g class="chart-month-hit" tabindex="0"
+             [attr.aria-label]="productionMonthLabel(row) + ': Máquina 1 ' + row.maquina1_unidades + ', Máquina 2 ' + row.maquina2_unidades + ', total ' + row.total_unidades"
+             (mouseenter)="selectedProductionMonth.set(row)"
+             (focus)="selectedProductionMonth.set(row)"
+             (click)="selectedProductionMonth.set(row)">
+            <rect [attr.x]="productionX(i) - 25" y="35" width="50" height="205" />
+            <circle [attr.cx]="productionX(i)" [attr.cy]="productionY(row.total_unidades)" r="5" class="chart-dot total" />
+            <circle [attr.cx]="productionX(i)" [attr.cy]="productionY(row.maquina1_unidades)" r="4" class="chart-dot m1" />
+            <circle [attr.cx]="productionX(i)" [attr.cy]="productionY(row.maquina2_unidades)" r="4" class="chart-dot m2" />
+          </g>
+        </g>
+        <text x="8" y="49" class="axis-title">Cantidad</text>
+        <text x="955" y="280" class="axis-title end">Mes</text>
+      </svg>
+    </div>
+    <div class="chart-tooltip" *ngIf="selectedProductionMonth() as selected">
+      <strong>{{ productionMonthLabel(selected) }}</strong>
+      <span class="m1">Máquina 1: {{ selected.maquina1_unidades | number:'1.0-0' }}</span>
+      <span class="m2">Máquina 2: {{ selected.maquina2_unidades | number:'1.0-0' }}</span>
+      <span class="total">Total: {{ selected.total_unidades | number:'1.0-0' }}</span>
+    </div>
   </section>
 </main>

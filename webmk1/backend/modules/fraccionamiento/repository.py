@@ -55,6 +55,13 @@ def _kg_requeridos(gramaje: int, paquetes: int) -> float:
     return paquetes * (_unidades_por_paquete(gramaje) * gramaje) / 1000.0
 
 
+def _fractionation_timestamp(fecha: str) -> str:
+    parsed = dt.datetime.strptime(fecha, "%Y-%m-%d").date()
+    if parsed == dt.date.today():
+        return dt.datetime.now().replace(microsecond=0).isoformat(sep=" ")
+    return f"{fecha} 00:00:00"
+
+
 def _bag_kg(product_name: str) -> float:
     key = _normalize_product_key(product_name)
     if key in {"arroz", "azucar"}:
@@ -199,10 +206,9 @@ class FraccionamientoRepository:
     def create(self, payload: FraccionamientoCreate) -> FraccionamientoHistoryRow:
         fecha = (payload.fecha or "").strip() or dt.date.today().isoformat()
         try:
-            dt.datetime.strptime(fecha, "%Y-%m-%d")
+            fecha_sql = _fractionation_timestamp(fecha)
         except ValueError as exc:
             raise ValueError("Formato de fecha invalido. Use YYYY-MM-DD.") from exc
-        fecha_sql = f"{fecha} 00:00:00"
         kg = _kg_requeridos(payload.gramaje, payload.paquetes)
 
         with connection("fraccionadora") as cn:

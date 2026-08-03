@@ -1,7 +1,11 @@
 from __future__ import annotations
 
+import sys
+import tempfile
 from datetime import date
+from pathlib import Path
 
+from fastapi import UploadFile
 from core.database import connection
 from modules.cobros_facturas.schemas import (
     CobroFacturaCreate,
@@ -9,7 +13,16 @@ from modules.cobros_facturas.schemas import (
     CobroFacturaRow,
     CobrosSummary,
     FacturaPendienteRow,
+    ReciboFacturaItem,
+    ReciboPreview,
 )
+
+ROOT_DIR = Path(__file__).resolve().parents[4]
+FACTURAS_DIR = ROOT_DIR / "importadorfactur"
+if str(FACTURAS_DIR) not in sys.path:
+    sys.path.insert(0, str(FACTURAS_DIR))
+
+from recibo_parser import parse_receipt  # noqa: E402
 
 
 class CobrosFacturasRepository:
@@ -79,7 +92,19 @@ class CobrosFacturasRepository:
             )
             """
         )
+        cn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS bag_collection_items(
+                id BIGSERIAL PRIMARY KEY,
+                collection_id BIGINT NOT NULL REFERENCES invoice_collections(id) ON DELETE CASCADE,
+                bag_sale_id BIGINT NOT NULL REFERENCES bag_sales(id) ON DELETE CASCADE,
+                monto_gs NUMERIC NOT NULL,
+                UNIQUE(collection_id, bag_sale_id)
+            )
+            """
+        )
         cn.execute("CREATE INDEX IF NOT EXISTS idx_invoice_collection_items_invoice ON invoice_collection_items(invoice_id)")
+        cn.execute("CREATE INDEX IF NOT EXISTS idx_bag_collection_items_sale ON bag_collection_items(bag_sale_id)")
         self._migrate_legacy_collections(cn)
 
     def summary(self, from_date: str = "", to_date: str = "") -> CobrosSummary:
@@ -93,7 +118,7 @@ class CobrosFacturasRepository:
         with connection("fraccionadora") as cn:
             self._ensure_schema(cn)
             items = self._full_collection_items(cn, invoice_ids)
-            total = sum(monto for _, monto in items)
+            total = sum(monto for _, _, monto in items)
             row = cn.execute(
                 """
                 INSERT INTO invoice_collections(
@@ -117,6 +142,48 @@ class CobrosFacturasRepository:
             self._sync_legacy_collection(cn, cobro)
             return cobro
 
+    def parse_recibo_pdf(self, upload: UploadFile) -> ReciboPreview:
+        filename = upload.filename or ""
+        if not filename.lower().endswith(".pdf"):
+            raise ValueError("Seleccione un archivo PDF.")
+
+        tmp_path: Path | None = None
+        try:
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
+                tmp.write(upload.file.read())
+                tmp_path = Path(tmp.name)
+            result = parse_receipt(tmp_path)
+        finally:
+            upload.file.close()
+            if tmp_path and tmp_path.exists():
+                tmp_path.unlink(missing_ok=True)
+
+        meta = result.get("meta") or {}
+        items = [
+            ReciboFacturaItem(
+                linea=int(item.get("linea") or idx),
+                factura=item.get("factura") or "",
+                monto=item.get("monto"),
+            )
+            for idx, item in enumerate(result.get("items") or [], start=1)
+        ]
+        if not meta.get("numero"):
+            raise ValueError("No se pudo detectar el numero de recibo.")
+        if not items:
+            raise ValueError("No se detectaron facturas en el recibo.")
+
+        return ReciboPreview(
+            numero=meta.get("numero") or "",
+            ruc_emisor=meta.get("ruc_emisor") or "",
+            cliente=meta.get("cliente") or "",
+            ruc_cliente=meta.get("ruc_cliente") or "",
+            fecha=meta.get("fecha") or "",
+            cheque_no=meta.get("cheque_no") or "",
+            banco=meta.get("banco") or "",
+            total=float(meta.get("total") or 0),
+            items=items,
+        )
+
     def update(self, collection_id: int, payload: CobroFacturaCreate) -> CobroFacturaRow:
         fecha = (payload.fecha_cobro or "").strip() or date.today().isoformat()
         invoice_ids = self._normalize_invoice_ids(payload.items)
@@ -129,8 +196,12 @@ class CobrosFacturasRepository:
                 "SELECT invoice_id FROM invoice_collection_items WHERE collection_id = %s",
                 (collection_id,),
             ).fetchall()
+            old_bag_items = cn.execute(
+                "SELECT bag_sale_id FROM bag_collection_items WHERE collection_id = %s",
+                (collection_id,),
+            ).fetchall()
             items = self._full_collection_items(cn, invoice_ids)
-            total = sum(monto for _, monto in items)
+            total = sum(monto for _, _, monto in items)
             cn.execute(
                 """
                 UPDATE invoice_collections
@@ -154,59 +225,92 @@ class CobrosFacturasRepository:
                 ),
             )
             cn.execute("DELETE FROM invoice_collection_items WHERE collection_id = %s", (collection_id,))
+            cn.execute("DELETE FROM bag_collection_items WHERE collection_id = %s", (collection_id,))
             self._insert_items(cn, collection_id, items)
             cobro = self._cobro(cn, collection_id)
             self._sync_legacy_collection(cn, cobro)
-            current_ids = {item.invoice_id for item in cobro.items}
+            current_ids = {(item.invoice_source, item.invoice_id) for item in cobro.items}
             for old in old_items:
                 old_id = int(old["invoice_id"] or 0)
-                if old_id and old_id not in current_ids:
+                if old_id and ("sales", old_id) not in current_ids:
                     self._mark_legacy_invoice(cn, old_id, False)
+            for old in old_bag_items:
+                old_id = int(old["bag_sale_id"] or 0)
+                if old_id and ("bag", old_id) not in current_ids:
+                    self._mark_legacy_bag(cn, old_id, False)
             return cobro
 
     def _normalize_invoice_ids(self, raw_items) -> list[int]:
-        invoice_ids: list[int] = []
+        invoice_ids: list[tuple[str, int]] = []
         for item in raw_items:
             invoice_id = int(item.invoice_id)
-            if invoice_id > 0 and invoice_id not in invoice_ids:
-                invoice_ids.append(invoice_id)
+            source = str(getattr(item, "invoice_source", "sales") or "sales").strip().lower()
+            if source not in {"sales", "bag"}:
+                source = "sales"
+            key = (source, invoice_id)
+            if invoice_id > 0 and key not in invoice_ids:
+                invoice_ids.append(key)
         if not invoice_ids:
             raise ValueError("Seleccione al menos una factura.")
         return invoice_ids
 
-    def _full_collection_items(self, cn, invoice_ids: list[int]) -> list[tuple[int, float]]:
-        rows = cn.execute(
-            """
-            SELECT id,
-                   COALESCE(total_gs, 0) - 0.30 * (COALESCE(iva5_gs, 0) + COALESCE(iva10_gs, 0)) AS total_ret_gs
-            FROM sales_invoices
-            WHERE id = ANY(%s)
-            """,
-            (invoice_ids,),
-        ).fetchall()
-        amounts = {int(r["id"]): float(r["total_ret_gs"] or 0) for r in rows}
-        missing = [str(invoice_id) for invoice_id in invoice_ids if invoice_id not in amounts]
+    def _full_collection_items(self, cn, invoice_ids: list[tuple[str, int]]) -> list[tuple[str, int, float]]:
+        sales_ids = [invoice_id for source, invoice_id in invoice_ids if source == "sales"]
+        bag_ids = [invoice_id for source, invoice_id in invoice_ids if source == "bag"]
+        amounts: dict[tuple[str, int], float] = {}
+        if sales_ids:
+            rows = cn.execute(
+                """
+                SELECT id,
+                       COALESCE(total_gs, 0) - 0.30 * (COALESCE(iva5_gs, 0) + COALESCE(iva10_gs, 0)) AS total_ret_gs
+                FROM sales_invoices
+                WHERE id = ANY(%s)
+                """,
+                (sales_ids,),
+            ).fetchall()
+            amounts.update({("sales", int(r["id"])): float(r["total_ret_gs"] or 0) for r in rows})
+        if bag_ids:
+            rows = cn.execute(
+                """
+                SELECT id, COALESCE(total_gs, 0) AS total_gs
+                FROM bag_sales
+                WHERE id = ANY(%s)
+                """,
+                (bag_ids,),
+            ).fetchall()
+            amounts.update({("bag", int(r["id"])): float(r["total_gs"] or 0) for r in rows})
+        missing = [f"{source}:{invoice_id}" for source, invoice_id in invoice_ids if (source, invoice_id) not in amounts]
         if missing:
             raise ValueError(f"Factura no encontrada: {', '.join(missing)}")
-        items = [(invoice_id, amounts[invoice_id]) for invoice_id in invoice_ids]
-        if any(monto <= 0 for _, monto in items):
+        items = [(source, invoice_id, amounts[(source, invoice_id)]) for source, invoice_id in invoice_ids]
+        if any(monto <= 0 for _, _, monto in items):
             raise ValueError("Una o mas facturas no tienen importe cobrable.")
         return items
 
-    def _insert_items(self, cn, collection_id: int, items: list[tuple[int, float]]) -> None:
-        for invoice_id, monto in items:
-            cn.execute(
-                """
-                INSERT INTO invoice_collection_items(collection_id, invoice_id, monto_gs)
-                VALUES(%s, %s, %s)
-                """,
-                (collection_id, invoice_id, monto),
-            )
+    def _insert_items(self, cn, collection_id: int, items: list[tuple[str, int, float]]) -> None:
+        for source, invoice_id, monto in items:
+            if source == "bag":
+                cn.execute(
+                    """
+                    INSERT INTO bag_collection_items(collection_id, bag_sale_id, monto_gs)
+                    VALUES(%s, %s, %s)
+                    """,
+                    (collection_id, invoice_id, monto),
+                )
+            else:
+                cn.execute(
+                    """
+                    INSERT INTO invoice_collection_items(collection_id, invoice_id, monto_gs)
+                    VALUES(%s, %s, %s)
+                    """,
+                    (collection_id, invoice_id, monto),
+                )
 
     def _pendientes(self, cn, from_date: str = "", to_date: str = "") -> list[FacturaPendienteRow]:
         rows = cn.execute(
             """
             SELECT si.id AS invoice_id,
+                   'sales' AS invoice_source,
                    CAST(si.ts AS TEXT) AS ts,
                    COALESCE(si.invoice_no, '') AS invoice_no,
                    COALESCE(si.customer, '') AS customer,
@@ -229,7 +333,39 @@ class CobrosFacturasRepository:
             """,
             (from_date.strip(), from_date.strip(), to_date.strip(), to_date.strip()),
         ).fetchall()
-        return [FacturaPendienteRow(**dict(r)) for r in rows]
+        bag_rows = cn.execute(
+            """
+            SELECT bs.id AS invoice_id,
+                   'bag' AS invoice_source,
+                   CAST(bs.ts AS TEXT) AS ts,
+                   COALESCE(bs.invoice_no, '') AS invoice_no,
+                   COALESCE(bs.customer, '') AS customer,
+                   COALESCE(bs.total_gs, 0) AS total_gs,
+                   0 AS cobrado_gs,
+                   COALESCE(bs.total_gs, 0) AS saldo_gs
+            FROM bag_sales bs
+            WHERE (%s = '' OR bs.ts::date >= CAST(NULLIF(%s, '') AS date))
+              AND (%s = '' OR bs.ts::date <= CAST(NULLIF(%s, '') AS date))
+              AND NOT EXISTS (
+                SELECT 1 FROM bag_collection_items bci WHERE bci.bag_sale_id = bs.id
+              )
+              AND NOT EXISTS (
+                SELECT 1
+                FROM dashboard_collection_flags dcf
+                WHERE dcf.status_key IN (
+                    'bag:' || bs.id::text,
+                    'bag:' || bs.id::text || ':' || COALESCE(CAST(bs.ts AS TEXT),'') || ':' || COALESCE(bs.invoice_no,'')
+                )
+                  AND COALESCE(dcf.collected, 0) = 1
+              )
+            ORDER BY bs.ts DESC, bs.id DESC
+            LIMIT 500
+            """,
+            (from_date.strip(), from_date.strip(), to_date.strip(), to_date.strip()),
+        ).fetchall()
+        all_rows = [dict(r) for r in rows] + [dict(r) for r in bag_rows]
+        all_rows.sort(key=lambda r: (str(r.get("ts") or ""), int(r.get("invoice_id") or 0)), reverse=True)
+        return [FacturaPendienteRow(**r) for r in all_rows[:500]]
 
     def _cobros(self, cn) -> list[CobroFacturaRow]:
         rows = cn.execute(
@@ -265,6 +401,7 @@ class CobrosFacturasRepository:
         items = cn.execute(
             """
             SELECT ici.id, ici.invoice_id, COALESCE(si.invoice_no, '') AS invoice_no,
+                   'sales' AS invoice_source,
                    COALESCE(si.customer, '') AS customer,
                    COALESCE(si.total_gs, 0) AS factura_total_gs,
                    ici.monto_gs
@@ -275,8 +412,22 @@ class CobrosFacturasRepository:
             """,
             (int(row["id"]),),
         ).fetchall()
+        bag_items = cn.execute(
+            """
+            SELECT bci.id, bci.bag_sale_id AS invoice_id, COALESCE(bs.invoice_no, '') AS invoice_no,
+                   'bag' AS invoice_source,
+                   COALESCE(bs.customer, '') AS customer,
+                   COALESCE(bs.total_gs, 0) AS factura_total_gs,
+                   bci.monto_gs
+            FROM bag_collection_items bci
+            JOIN bag_sales bs ON bs.id = bci.bag_sale_id
+            WHERE bci.collection_id = %s
+            ORDER BY bs.ts DESC, bs.id DESC
+            """,
+            (int(row["id"]),),
+        ).fetchall()
         data = dict(row)
-        data["items"] = [CobroFacturaItemRow(**dict(item)) for item in items]
+        data["items"] = [CobroFacturaItemRow(**dict(item)) for item in list(items) + list(bag_items)]
         return CobroFacturaRow(**data)
 
     def _migrate_legacy_collections(self, cn) -> None:
@@ -343,6 +494,26 @@ class CobrosFacturasRepository:
 
     def _sync_legacy_collection(self, cn, cobro: CobroFacturaRow) -> None:
         for item in cobro.items:
+            if item.invoice_source == "bag":
+                inv = cn.execute(
+                    """
+                    SELECT id, CAST(ts AS TEXT) AS invoice_ts, COALESCE(invoice_no, '') AS invoice_no,
+                           COALESCE(customer, '') AS cliente, COALESCE(total_gs, 0) AS monto_total_gs
+                    FROM bag_sales
+                    WHERE id = %s
+                    """,
+                    (item.invoice_id,),
+                ).fetchone()
+                if inv:
+                    self._save_legacy_flags(
+                        cn,
+                        item.invoice_id,
+                        str(inv["invoice_ts"] or ""),
+                        str(inv["invoice_no"] or ""),
+                        True,
+                        source="bag",
+                    )
+                continue
             inv = cn.execute(
                 """
                 SELECT id, CAST(ts AS TEXT) AS invoice_ts, COALESCE(invoice_no, '') AS invoice_no,
@@ -406,8 +577,33 @@ class CobrosFacturasRepository:
             return
         self._save_legacy_flags(cn, invoice_id, str(inv["invoice_ts"] or ""), str(inv["invoice_no"] or ""), collected)
 
-    def _save_legacy_flags(self, cn, invoice_id: int, invoice_ts: str, invoice_no: str, collected: bool) -> None:
-        keys = [f"std:{int(invoice_id)}:{invoice_ts.strip()}:{invoice_no.strip()}", f"std:{int(invoice_id)}"]
+    def _mark_legacy_bag(self, cn, invoice_id: int, collected: bool) -> None:
+        inv = cn.execute(
+            "SELECT CAST(ts AS TEXT) AS invoice_ts, COALESCE(invoice_no, '') AS invoice_no FROM bag_sales WHERE id = %s",
+            (invoice_id,),
+        ).fetchone()
+        if not inv:
+            return
+        self._save_legacy_flags(
+            cn,
+            invoice_id,
+            str(inv["invoice_ts"] or ""),
+            str(inv["invoice_no"] or ""),
+            collected,
+            source="bag",
+        )
+
+    def _save_legacy_flags(
+        self,
+        cn,
+        invoice_id: int,
+        invoice_ts: str,
+        invoice_no: str,
+        collected: bool,
+        source: str = "sales",
+    ) -> None:
+        prefix = "bag" if source == "bag" else "std"
+        keys = [f"{prefix}:{int(invoice_id)}:{invoice_ts.strip()}:{invoice_no.strip()}", f"{prefix}:{int(invoice_id)}"]
         for key in keys:
             cn.execute(
                 """

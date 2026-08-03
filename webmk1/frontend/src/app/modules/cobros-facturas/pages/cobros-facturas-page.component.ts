@@ -11,6 +11,7 @@ import { CobroFacturaCreate, CobroFacturaRow, CobrosSummary, FacturaPendienteRow
 
 type CobroFormItem = {
   invoice_id: number;
+  invoice_source: string;
   invoice_no: string;
   customer: string;
   monto_gs: number;
@@ -71,11 +72,13 @@ export class CobrosFacturasPageComponent implements OnInit {
   }
 
   addFactura(row: FacturaPendienteRow): void {
-    if (this.selectedItems.some((item) => item.invoice_id === row.invoice_id)) return;
+    const source = row.invoice_source || 'sales';
+    if (this.selectedItems.some((item) => item.invoice_id === row.invoice_id && item.invoice_source === source)) return;
     this.selectedItems = [
       ...this.selectedItems,
       {
         invoice_id: row.invoice_id,
+        invoice_source: source,
         invoice_no: row.invoice_no || `ID ${row.invoice_id}`,
         customer: row.customer || '-',
         monto_gs: Number(row.total_gs || 0),
@@ -98,6 +101,7 @@ export class CobrosFacturasPageComponent implements OnInit {
     };
     this.selectedItems = row.items.map((item) => ({
       invoice_id: item.invoice_id,
+      invoice_source: item.invoice_source || 'sales',
       invoice_no: item.invoice_no || `ID ${item.invoice_id}`,
       customer: item.customer || '-',
       monto_gs: Number(item.monto_gs || 0),
@@ -239,6 +243,7 @@ export class CobrosFacturasPageComponent implements OnInit {
       items: this.selectedItems.map((item) => ({
         id: 0,
         invoice_id: item.invoice_id,
+        invoice_source: item.invoice_source || 'sales',
         invoice_no: item.invoice_no,
         customer: item.customer,
         factura_total_gs: item.monto_gs,
@@ -313,6 +318,7 @@ export class CobrosFacturasPageComponent implements OnInit {
       ...this.form,
       items: this.selectedItems.map((item) => ({
         invoice_id: item.invoice_id,
+        invoice_source: item.invoice_source || 'sales',
         monto_gs: Number(item.monto_gs || 0),
       })),
     };

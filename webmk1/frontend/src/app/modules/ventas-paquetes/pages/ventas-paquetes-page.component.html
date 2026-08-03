@@ -14,6 +14,52 @@
   <p class="error" *ngIf="error()">{{ error() }}</p>
   <p class="message" *ngIf="message()">{{ message() }}</p>
 
+  <section class="panel pdf-panel">
+    <header>Importar factura PDF</header>
+    <div class="pdf-actions">
+      <label class="file-button">
+        <input type="file" accept="application/pdf" (change)="onFacturaPdfSelected($event)" [disabled]="parsingPdf()">
+        {{ parsingPdf() ? 'Parseando...' : 'Seleccionar PDF' }}
+      </label>
+      <button type="button" class="secondary-action" (click)="aplicarFacturaParseada()" [disabled]="!parsedFactura()">
+        Aplicar a factura
+      </button>
+      <div class="pdf-totals" *ngIf="parsedFactura() as parsed">
+        <strong>{{ parsed.numero || '-' }}</strong>
+        <span>{{ parsed.items.length }} items</span>
+        <span>{{ parsedTotalQty() }} unidades</span>
+        <span>{{ fmtGs(parsed.total_gs) }} Gs</span>
+        <span>IVA {{ fmtGs(parsed.total_iva_gs) }}</span>
+      </div>
+    </div>
+
+    <div class="table-wrap pdf-preview" *ngIf="parsedFactura() as parsed">
+      <table>
+        <thead>
+          <tr>
+            <th>Descripcion PDF</th>
+            <th class="num">Cant.</th>
+            <th class="num">Precio</th>
+            <th class="num">IVA</th>
+            <th class="num">Total</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let item of parsed.items">
+            <td>{{ item.descripcion }}</td>
+            <td class="num">{{ item.cantidad }}</td>
+            <td class="num">{{ fmtGs(item.precio_unitario_gs) }}</td>
+            <td class="num">{{ item.iva || '-' }}</td>
+            <td class="num">{{ fmtGs(item.total_linea_gs) }}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="warning" *ngIf="unmatchedPdfItems().length">
+      Sin match automatico: {{ unmatchedPdfItems().length }} item(s). Complete esas cantidades manualmente.
+    </p>
+  </section>
+
   <section class="panel">
     <header>Datos de factura</header>
     <div class="form-grid invoice-grid">
@@ -64,8 +110,8 @@
               </td>
               <td class="num">{{ item.gramaje }}</td>
               <td class="num">{{ item.paquetes }}</td>
-              <td class="num" [class.warn]="item.price_gs == null">{{ item.price_gs == null ? '-' : fmtGs(item.price_gs) }}</td>
-              <td class="num">{{ item.iva || '-' }}</td>
+              <td class="num" [class.warn]="item.price_gs == null">{{ item.price_gs == null ? '-' : fmtGs(effectivePrice(item)) }}</td>
+              <td class="num">{{ effectiveIva(item) || '-' }}</td>
               <td class="num">
                 <input class="qty-input" type="number" min="0" [max]="item.paquetes" [(ngModel)]="sellQuantities[stockKey(item)]">
               </td>
@@ -103,7 +149,7 @@
             </td>
             <td class="num">{{ item.gramaje }}</td>
             <td class="num">{{ item.cantidad }}</td>
-            <td class="num">{{ fmtGs(item.price_gs) }}</td>
+            <td class="num">{{ fmtGs(effectivePrice(item)) }}</td>
             <td class="num">{{ fmtGs(lineTotal(item)) }}</td>
             <td></td>
           </tr>

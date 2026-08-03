@@ -1,5 +1,6 @@
 export type FacturaPendienteRow = {
   invoice_id: number;
+  invoice_source: string;
   ts: string;
   invoice_no: string;
   customer: string;
@@ -10,6 +11,7 @@ export type FacturaPendienteRow = {
 
 export type CobroFacturaItemIn = {
   invoice_id: number;
+  invoice_source: string;
   monto_gs: number;
 };
 
@@ -25,6 +27,7 @@ export type CobroFacturaCreate = {
 export type CobroFacturaItemRow = {
   id: number;
   invoice_id: number;
+  invoice_source: string;
   invoice_no: string;
   customer: string;
   factura_total_gs: number;
@@ -48,4 +51,3 @@ export type CobrosSummary = {
   pendientes: FacturaPendienteRow[];
   cobros: CobroFacturaRow[];
 };
-

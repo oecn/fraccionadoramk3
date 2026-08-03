@@ -7,7 +7,7 @@
 
 .totals-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 14px;
   margin-top: 16px;
 }
@@ -111,6 +111,30 @@ tr.raw-near td {
   color: #166534;
 }
 
+.count-diff {
+  display: inline-grid;
+  gap: 2px;
+  justify-items: end;
+  font-weight: 900;
+}
+
+.count-diff small {
+  font-size: 11px;
+  font-weight: 850;
+}
+
+.count-diff.positive {
+  color: #166534;
+}
+
+.count-diff.negative {
+  color: #b42318;
+}
+
+.count-diff.neutral {
+  color: #64748b;
+}
+
 .whatsapp-action {
   display: inline-flex;
   align-items: center;
@@ -197,6 +221,124 @@ tr.raw-near td {
   background: #f8fafc;
 }
 
+.film-alerts-list label {
+  grid-template-columns: minmax(180px, 1fr) 150px 140px;
+}
+
+.table-actions {
+  display: flex;
+  flex: 1;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.film-panel {
+  overflow: hidden;
+}
+
+.film-panel header {
+  padding: 13px 15px;
+}
+
+.film-panel header strong {
+  color: #071326;
+}
+
+.film-panel header span {
+  color: #66758d;
+  font-size: 13px;
+}
+
+.film-table-wrap {
+  max-height: 520px;
+  overflow: auto;
+}
+
+.film-panel table {
+  width: 100%;
+  border-collapse: collapse;
+  white-space: nowrap;
+  font-size: 12.5px;
+}
+
+.film-panel th,
+.film-panel td {
+  padding: 8px 10px;
+  border-bottom: 1px solid #edf2f8;
+  text-align: left;
+}
+
+.film-panel th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: #f4f8fb;
+  color: #234254;
+  font-size: 12px;
+}
+
+.film-panel tbody tr:nth-child(even) td {
+  background: #fbfcfe;
+}
+
+.film-panel tbody tr:hover td {
+  background: #edf7f8;
+}
+
+.film-row.bajo td {
+  color: #ef3333;
+}
+
+.film-row.cerca td {
+  color: #92400e;
+}
+
+.film-row.normal td {
+  color: #009944;
+}
+
+.film-trend {
+  font-weight: 900;
+}
+
+.film-trend.bajo,
+strong.bajo {
+  color: #ef3333;
+}
+
+.film-trend.cerca,
+strong.cerca {
+  color: #d97706;
+}
+
+.film-trend.normal,
+strong.normal {
+  color: #009944;
+}
+
+.film-coverage {
+  position: relative;
+  width: 260px;
+  height: 14px;
+  border: 1px solid #2d62c7;
+  background: #ffffff;
+}
+
+.film-coverage span {
+  display: block;
+  height: 100%;
+  background: #cfe0ff;
+}
+
+.film-coverage strong {
+  position: absolute;
+  inset: 0;
+  color: #071326;
+  font-size: 11px;
+  line-height: 13px;
+  text-align: center;
+}
+
 .alerts-list span {
   color: #0f172a;
   font-weight: 900;
@@ -277,7 +419,7 @@ tr.raw-near td {
 
 .adjustments-grid label {
   display: grid;
-  grid-template-columns: minmax(150px, 1fr) 130px 110px;
+  grid-template-columns: minmax(150px, 1fr) 210px 110px 90px;
   align-items: center;
   gap: 10px;
   padding: 10px;
@@ -296,6 +438,51 @@ tr.raw-near td {
   font-weight: 800;
 }
 
+.adjustments-grid .calculated-kg {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.weekly-count-list {
+  display: grid;
+  align-content: start;
+  gap: 10px;
+  overflow: auto;
+  padding: 12px;
+}
+
+.weekly-count-list h2 {
+  margin: 8px 0 0;
+  color: #071326;
+  font-size: 15px;
+}
+
+.weekly-count-list label {
+  display: grid;
+  grid-template-columns: minmax(130px, 1fr) 220px 110px 130px 190px;
+  align-items: center;
+  gap: 10px;
+  padding: 10px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #f8fafc;
+}
+
+.weekly-count-list span,
+.weekly-count-list strong {
+  color: #0f172a;
+  font-weight: 900;
+}
+
+.weekly-count-list small {
+  color: #64748b;
+  font-weight: 800;
+}
+
+.weekly-count-list .negative-diff {
+  color: #b42318;
+}
+
 .table-wrap.compact {
   max-height: 360px;
 }
@@ -309,6 +496,7 @@ tr.raw-near td {
   .totals-grid,
   .stock-grid,
   .alerts-list label,
+  .weekly-count-list label,
   .adjustments-grid,
   .adjustments-grid label,
   .suggested-controls {

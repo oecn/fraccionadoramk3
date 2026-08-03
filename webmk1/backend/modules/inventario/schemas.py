@@ -16,6 +16,10 @@ class InventoryRawRow(BaseModel):
     lotes_abiertos: int
     costo_promedio_gs: float
     valor_stock_gs: float
+    conteo_planta_bolsas: float | None = None
+    conteo_planta_kg: float | None = None
+    conteo_diferencia_kg: float | None = None
+    conteo_fecha: str | None = None
 
 
 class InventoryPackageRow(BaseModel):
@@ -27,6 +31,18 @@ class InventoryPackageRow(BaseModel):
     price_gs: float | None
     iva: int | None
     valor_venta_gs: float
+    conteo_planta_paquetes: int | None = None
+    conteo_diferencia_paquetes: int | None = None
+    conteo_fecha: str | None = None
+
+
+class InventoryFilmRow(BaseModel):
+    product_id: int
+    producto: str
+    gramaje: int
+    rollos: int
+    alerta_min_rollos: int | None = None
+    alerta_estado: str = "normal"
 
 
 class InventoryLotRow(BaseModel):
@@ -45,13 +61,16 @@ class InventoryLotRow(BaseModel):
 class InventorySummary(BaseModel):
     raw_stock: list[InventoryRawRow]
     package_stock: list[InventoryPackageRow]
+    film_stock: list[InventoryFilmRow]
     lotes_abiertos: list[InventoryLotRow]
     raw_alerts_count: int = 0
+    film_alerts_count: int = 0
     total_raw_kg: float
     total_raw_valor_gs: float
     total_paquetes: int
     total_unidades: int
     total_venta_gs: float
+    total_film_rollos: int = 0
 
 
 class RawStockAlertUpdate(BaseModel):
@@ -76,7 +95,44 @@ class PackageStockAdjustment(BaseModel):
     paquetes: int
 
 
+class PackageStockControlCount(BaseModel):
+    product_id: int
+    gramaje: int
+    sistema_paquetes: int
+    planta_paquetes: int
+
+
+class FilmStockAdjustment(BaseModel):
+    product_id: int
+    gramaje: int
+    rollos: int
+
+
+class FilmStockAlertUpdate(BaseModel):
+    product_id: int
+    gramaje: int
+    min_rollos: int | None = None
+
+
+class FilmStockAlertsUpdate(BaseModel):
+    alerts: list[FilmStockAlertUpdate]
+
+
 class InventoryAdjustmentUpdate(BaseModel):
     raw_stock: list[RawStockAdjustment] = []
     package_stock: list[PackageStockAdjustment] = []
+    film_stock: list[FilmStockAdjustment] = []
     motivo: str = ""
+
+
+class RawStockControlCount(BaseModel):
+    product_id: int
+    sistema_kg: float
+    planta_bolsas: float
+    bolsa_kg: float
+
+
+class InventoryControlAuditCreate(BaseModel):
+    motivo: str = ""
+    raw_stock: list[RawStockControlCount] = []
+    package_stock: list[PackageStockControlCount] = []

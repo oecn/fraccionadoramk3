@@ -4,5 +4,6 @@ psycopg[binary]==3.2.3
 python-dotenv==1.0.1
 python-multipart==0.0.20
 pdfplumber==0.11.4
+pypdf==5.1.0
 google-api-python-client==2.160.0
 google-auth==2.38.0

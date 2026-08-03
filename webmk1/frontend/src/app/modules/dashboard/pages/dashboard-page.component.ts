@@ -7,6 +7,7 @@ import { FormsModule } from '@angular/forms';
 
 import {
   DashboardSummary,
+  MonthMovementSummary,
   OrderRow,
   PaymentCheckOption,
   PaymentCheckStatus,
@@ -19,6 +20,8 @@ import { fmtGs } from '../../../shared/formatters';
 import { dateOffset, todayIso } from '../../../shared/utils';
 import { CobrosFacturasService } from '../../cobros-facturas/cobros-facturas.service';
 import { CobroFacturaCreate, CobroFacturaRow } from '../../cobros-facturas/models/cobros-facturas.models';
+import { ProduccionMesRow } from '../../produccion/models/produccion.models';
+import { ProduccionService } from '../../produccion/produccion.service';
 
 @Component({
   selector: 'app-dashboard-page',
@@ -34,7 +37,16 @@ export class DashboardPageComponent implements OnInit {
   private readonly destroyRef = inject(DestroyRef);
   private readonly dashboard = inject(DashboardService);
   private readonly cobrosFacturas = inject(CobrosFacturasService);
+  private readonly produccion = inject(ProduccionService);
   readonly fmtGs = fmtGs;
+  readonly monthChart = {
+    width: 360,
+    height: 250,
+    top: 28,
+    right: 18,
+    bottom: 38,
+    left: 34,
+  };
 
   readonly sucursales = signal<string[]>([]);
   readonly data = signal<DashboardSummary | null>(null);
@@ -55,15 +67,17 @@ export class DashboardPageComponent implements OnInit {
   readonly invoiceCollections = signal<CobroFacturaRow[]>([]);
   readonly invoiceCollectionsOpen = signal<boolean>(false);
   readonly editingInvoiceCollection = signal<CobroFacturaRow | null>(null);
-  readonly selectedCollections = signal<Record<number, boolean>>({});
+  readonly selectedCollections = signal<Record<string, boolean>>({});
   readonly collectionDialogOpen = signal<boolean>(false);
   readonly savingCollection = signal<boolean>(false);
   readonly savingCollectionEdit = signal<boolean>(false);
+  readonly productionTrend = signal<ProduccionMesRow[]>([]);
+  readonly selectedProductionMonth = signal<ProduccionMesRow | null>(null);
 
   filters = {
     sucursal: '',
     search: '',
-    from_date: dateOffset(-30),
+    from_date: dateOffset(-60),
     to_date: dateOffset(30),
   };
 
@@ -105,6 +119,45 @@ export class DashboardPageComponent implements OnInit {
     this.refresh();
     this.loadPaymentChecks();
     this.loadInvoiceCollections();
+    this.loadProductionTrend();
+  }
+
+  loadProductionTrend(): void {
+    const now = new Date();
+    this.produccion.resumen(now.getFullYear(), now.getMonth() + 1, 12)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (summary) => {
+          this.productionTrend.set(summary.trend);
+          this.selectedProductionMonth.set(summary.trend.at(-1) || null);
+        },
+        error: () => this.productionTrend.set([]),
+      });
+  }
+
+  productionPoints(series: 'maquina1_unidades' | 'maquina2_unidades' | 'total_unidades'): string {
+    const rows = this.productionTrend();
+    const max = Math.max(1, ...rows.map((row) => row.total_unidades));
+    return rows.map((row, index) => {
+      const x = rows.length === 1 ? 500 : 55 + (index * 900) / (rows.length - 1);
+      const y = 235 - (row[series] / max) * 190;
+      return `${x.toFixed(1)},${y.toFixed(1)}`;
+    }).join(' ');
+  }
+
+  productionX(index: number): number {
+    const count = this.productionTrend().length;
+    return count === 1 ? 500 : 55 + (index * 900) / Math.max(1, count - 1);
+  }
+
+  productionY(value: number): number {
+    const max = Math.max(1, ...this.productionTrend().map((row) => row.total_unidades));
+    return 235 - (value / max) * 190;
+  }
+
+  productionMonthLabel(row: ProduccionMesRow): string {
+    const [year, month] = row.ym.split('-');
+    return `${month}/${year.slice(-2)}`;
   }
 
   refresh(): void {
@@ -197,6 +250,7 @@ export class DashboardPageComponent implements OnInit {
       observacion: row.observacion || '',
       items: row.items.map((item) => ({
         invoice_id: item.invoice_id,
+        invoice_source: item.invoice_source || 'sales',
         monto_gs: Number(item.monto_gs || 0),
       })),
     }).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
@@ -214,13 +268,17 @@ export class DashboardPageComponent implements OnInit {
     });
   }
 
-  toggleCollection(row: { invoice_id: number }, checked: boolean): void {
-    this.selectedCollections.update((current) => ({ ...current, [row.invoice_id]: checked }));
+  collectionKey(row: { invoice_id: number; invoice_source?: string }): string {
+    return `${row.invoice_source || 'sales'}:${row.invoice_id}`;
+  }
+
+  toggleCollection(row: { invoice_id: number; invoice_source?: string }, checked: boolean): void {
+    this.selectedCollections.update((current) => ({ ...current, [this.collectionKey(row)]: checked }));
   }
 
   selectedCollectionRows() {
     const selected = this.selectedCollections();
-    return (this.data()?.collections || []).filter((row) => selected[row.invoice_id]);
+    return (this.data()?.collections || []).filter((row) => selected[this.collectionKey(row)]);
   }
 
   selectedCollectionTotal(): number {
@@ -262,6 +320,7 @@ export class DashboardPageComponent implements OnInit {
       banco: this.collectionBankName(),
       items: rows.map((row) => ({
         invoice_id: row.invoice_id,
+        invoice_source: row.invoice_source || 'sales',
         monto_gs: Number(row.total_con_retencion || row.total_gs || 0),
       })),
     };
@@ -595,5 +654,68 @@ export class DashboardPageComponent implements OnInit {
     if (value < 0) return 'danger';
     if (value <= 3) return 'warning';
     return 'ok';
+  }
+
+  monthMovementMax(month: MonthMovementSummary): number {
+    return Math.max(
+      1,
+      Math.abs(Number(month.ventas_gs || 0)),
+      Math.abs(Number(month.compras_gs || 0)),
+      Math.abs(Number(month.gastos_gs || 0)),
+      Math.abs(Number(month.notas_credito_gs || 0)),
+    );
+  }
+
+  monthMovementWidth(value: number, month: MonthMovementSummary): number {
+    return Math.max(0, Math.min(100, (Math.abs(Number(value || 0)) / this.monthMovementMax(month)) * 100));
+  }
+
+  monthMoneyBars(month: MonthMovementSummary) {
+    const width = 34;
+    const gap = 18;
+    const start = 78;
+    return [
+      { label: 'Ventas', short: 'Ven', value: month.ventas_gs, x: start, width, className: 'ventas' },
+      { label: 'Compras', short: 'Com', value: month.compras_gs, x: start + width + gap, width, className: 'compras' },
+      { label: 'Gastos', short: 'Gas', value: month.gastos_gs, x: start + (width + gap) * 2, width, className: 'gastos' },
+      { label: 'Notas credito', short: 'NC', value: month.notas_credito_gs, x: start + (width + gap) * 3, width, className: 'notas' },
+    ];
+  }
+
+  monthChartY(value: number, month: MonthMovementSummary): number {
+    const top = this.monthChart.top;
+    const plotHeight = this.monthChart.height - this.monthChart.top - this.monthChart.bottom;
+    const max = Math.max(this.monthMovementMax(month), Math.abs(Number(month.resultado_gs || 0)));
+    return top + plotHeight - (Math.abs(Number(value || 0)) / max) * plotHeight;
+  }
+
+  monthBarHeight(value: number, month: MonthMovementSummary): number {
+    const baseline = this.monthChart.height - this.monthChart.bottom;
+    return Math.max(1, baseline - this.monthChartY(value, month));
+  }
+
+  monthBarLabel(value: number): string {
+    const amount = Number(value || 0) / 1_000_000;
+    if (Math.abs(amount) >= 10) return `${amount.toFixed(0)}M`;
+    if (Math.abs(amount) >= 1) return `${amount.toFixed(1)}M`;
+    return this.fmtGs(value);
+  }
+
+  signedGs(value: number): string {
+    const amount = Number(value || 0);
+    if (amount > 0) return `+${this.fmtGs(amount)}`;
+    if (amount < 0) return `-${this.fmtGs(Math.abs(amount))}`;
+    return this.fmtGs(0);
+  }
+
+  resultTone(value: number): string {
+    const amount = Number(value || 0);
+    if (amount > 0) return 'positive';
+    if (amount < 0) return 'negative';
+    return 'neutral';
+  }
+
+  currentMonthLabel(): string {
+    return new Date().toLocaleDateString('es-PY', { month: 'long', year: 'numeric' });
   }
 }

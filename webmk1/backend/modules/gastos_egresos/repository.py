@@ -11,6 +11,7 @@ from modules.gastos_egresos.schemas import (
     ExpenseCreate,
     ExpenseRow,
     ExpenseSummary,
+    FixedExpenseTask,
     ImportResult,
     IpsParseResult,
     RrhhImportRow,
@@ -32,6 +33,14 @@ from salary_txt_parser import parse_salary_advance_txt, to_json_dict  # type: ig
 
 TIPOS = ["Caja chica", "CAJA CHICA", "IPS", "Pago a personal", "Adelanto de salario", "Pago a profesionales", "Pagos varios"]
 FORMAS_PAGO = ["Efectivo", "Transferencia", "Cheque", "Homebanking"]
+FIXED_EXPENSE_TASKS = [
+    ("ips", "IPS", ["ips"]),
+    ("salario", "Salario", ["salario", "pago a personal"]),
+    ("adelanto", "Adelanto", ["adelanto"]),
+    ("tecnologia", "Tecnologia", ["tecnologia", "tecnologa"]),
+    ("chichi", "Chichi", ["chichi"]),
+    ("ezequiel", "Ezequiel", ["ezequiel"]),
+]
 
 
 class GastosEgresosRepository:
@@ -105,7 +114,49 @@ class GastosEgresosRepository:
             )
             for r in rows
         ]
-        return ExpenseSummary(rows=items, total_gs=sum(r.monto_gs for r in items), tipos=TIPOS, formas_pago=FORMAS_PAGO)
+        return ExpenseSummary(
+            rows=items,
+            total_gs=sum(r.monto_gs for r in items),
+            tipos=TIPOS,
+            formas_pago=FORMAS_PAGO,
+            fixed_tasks=self._fixed_expense_tasks(items),
+        )
+
+    def _fixed_expense_tasks(self, items: list[ExpenseRow]) -> list[FixedExpenseTask]:
+        out: list[FixedExpenseTask] = []
+        for key, label, keywords in FIXED_EXPENSE_TASKS:
+            matches = [
+                item for item in items
+                if any(
+                    kw in " ".join(
+                        [
+                            item.tipo or "",
+                            item.descripcion or "",
+                            item.nro_factura or "",
+                            item.referencia_pago or "",
+                        ]
+                    ).lower()
+                    for kw in keywords
+                )
+            ]
+            total = sum(item.monto_gs for item in matches)
+            last = max((item.fecha for item in matches), default="")
+            detail = ""
+            if matches:
+                latest = sorted(matches, key=lambda item: (item.fecha, item.id), reverse=True)[0]
+                detail = latest.descripcion or latest.tipo or ""
+            out.append(
+                FixedExpenseTask(
+                    key=key,
+                    label=label,
+                    paid=bool(matches),
+                    total_gs=total,
+                    count=len(matches),
+                    last_date=last,
+                    detail=detail,
+                )
+            )
+        return out
 
     def create(self, payload: ExpenseCreate) -> ExpenseRow:
         fecha = (payload.fecha or "").strip()
@@ -159,6 +210,58 @@ class GastosEgresosRepository:
                 )
         return ExpenseRow(
             id=expense_id,
+            fecha=fecha,
+            tipo=payload.tipo.strip(),
+            descripcion=payload.descripcion.strip(),
+            monto_gs=float(payload.monto_gs),
+            nro_factura=payload.nro_factura.strip(),
+            forma_pago=forma,
+            referencia_pago=referencia,
+        )
+
+    def update(self, expense_id: int, payload: ExpenseCreate) -> ExpenseRow:
+        fecha = (payload.fecha or "").strip()
+        try:
+            datetime.strptime(fecha, "%Y-%m-%d")
+        except ValueError as exc:
+            raise ValueError("Formato de fecha invalido. Use YYYY-MM-DD.") from exc
+        forma = (payload.forma_pago or "Efectivo").strip() or "Efectivo"
+        referencia = (payload.referencia_pago or "").strip()
+        if forma.lower() in {"cheque", "transferencia", "homebanking"} and not referencia:
+            raise ValueError("Debe cargar referencia/comprobante para esa forma de pago.")
+        if forma.lower() == "efectivo":
+            referencia = ""
+
+        with connection("fraccionadora") as cn:
+            self._ensure_schema(cn)
+            exists = cn.execute("SELECT id FROM expenses WHERE id = %s", (int(expense_id),)).fetchone()
+            if not exists:
+                raise ValueError("Gasto no encontrado.")
+            cn.execute(
+                """
+                UPDATE expenses
+                   SET ts = %s,
+                       tipo = %s,
+                       descripcion = %s,
+                       monto_gs = %s,
+                       nro_factura = %s,
+                       forma_pago = %s,
+                       referencia_pago = %s
+                 WHERE id = %s
+                """,
+                (
+                    fecha,
+                    payload.tipo.strip(),
+                    payload.descripcion.strip(),
+                    float(payload.monto_gs),
+                    payload.nro_factura.strip(),
+                    forma,
+                    referencia,
+                    int(expense_id),
+                ),
+            )
+        return ExpenseRow(
+            id=int(expense_id),
             fecha=fecha,
             tipo=payload.tipo.strip(),
             descripcion=payload.descripcion.strip(),

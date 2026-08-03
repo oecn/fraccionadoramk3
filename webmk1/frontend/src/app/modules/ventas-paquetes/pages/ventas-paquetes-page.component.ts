@@ -5,7 +5,7 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 
 import { FormsModule } from '@angular/forms';
 
-import { VentaOptions, VentaStockItem } from '../models/ventas-paquetes.models';
+import { FacturaVentaParseItem, FacturaVentaParsePreview, VentaOptions, VentaStockItem } from '../models/ventas-paquetes.models';
 import { VentasPaquetesService } from '../ventas-paquetes.service';
 import { httpErrorMessage } from '../../../shared/http-error';
 import { fmtGs } from '../../../shared/formatters';
@@ -28,6 +28,9 @@ export class VentasPaquetesPageComponent implements OnInit {
   readonly options = signal<VentaOptions>({ stock: [], hoy: '' });
   readonly loading = signal<boolean>(false);
   readonly saving = signal<boolean>(false);
+  readonly parsingPdf = signal<boolean>(false);
+  readonly parsedFactura = signal<FacturaVentaParsePreview | null>(null);
+  readonly unmatchedPdfItems = signal<FacturaVentaParseItem[]>([]);
   readonly error = signal<string>('');
   readonly message = signal<string>('');
 
@@ -44,6 +47,7 @@ export class VentasPaquetesPageComponent implements OnInit {
   };
 
   sellQuantities: Record<string, number | null> = {};
+  pdfOverrides: Record<string, { price_gs: number; iva: number }> = {};
 
   ngOnInit(): void {
     this.loadOptions();
@@ -95,6 +99,8 @@ export class VentasPaquetesPageComponent implements OnInit {
           product_id: item.product_id,
           gramaje: item.gramaje,
           cantidad: item.cantidad,
+          price_gs: this.effectivePrice(item),
+          iva: this.effectiveIva(item),
         })),
       })
       .pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
@@ -107,6 +113,7 @@ export class VentasPaquetesPageComponent implements OnInit {
             : ` No se envio a Google Sheets: ${res.sheet_error || 'sin detalle'}.`;
           this.message.set(`Factura #${res.invoice_id} registrada por ${this.fmtGs(res.total_gs)} Gs.${sheetMsg}`);
           this.sellQuantities = {};
+          this.pdfOverrides = {};
           this.invoice.invoice_no = '';
           this.invoice.customer = '';
           this.loadOptions();
@@ -116,6 +123,63 @@ export class VentasPaquetesPageComponent implements OnInit {
           this.error.set(httpErrorMessage(err, 'No se pudo registrar la venta'));
         },
       });
+  }
+
+  onFacturaPdfSelected(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.[0];
+    input.value = '';
+    if (!file) return;
+
+    this.parsingPdf.set(true);
+    this.error.set('');
+    this.message.set('');
+    this.service.parseFacturaPdf(file).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
+      next: (preview) => {
+        this.parsingPdf.set(false);
+        this.parsedFactura.set(preview);
+        this.unmatchedPdfItems.set([]);
+        this.message.set(`PDF parseado: ${preview.items.length} items, total ${this.fmtGs(preview.total_gs)} Gs.`);
+      },
+      error: (err) => {
+        this.parsingPdf.set(false);
+        this.parsedFactura.set(null);
+        this.unmatchedPdfItems.set([]);
+        this.error.set(httpErrorMessage(err, 'No se pudo parsear la factura PDF'));
+      },
+    });
+  }
+
+  aplicarFacturaParseada(): void {
+    const parsed = this.parsedFactura();
+    if (!parsed) return;
+
+    this.invoice.invoice_no = parsed.numero || this.invoice.invoice_no;
+    this.invoice.customer = parsed.cliente || this.invoice.customer;
+    this.invoice.fecha = parsed.fecha_emision || this.invoice.fecha;
+
+    const nextQuantities: Record<string, number | null> = { ...this.sellQuantities };
+    const nextOverrides: Record<string, { price_gs: number; iva: number }> = { ...this.pdfOverrides };
+    const unmatched: FacturaVentaParseItem[] = [];
+    for (const item of parsed.items) {
+      const stock = this.matchParsedItem(item);
+      if (!stock) {
+        unmatched.push(item);
+        continue;
+      }
+      const key = this.stockKey(stock);
+      nextQuantities[key] = item.cantidad;
+      nextOverrides[key] = { price_gs: item.precio_unitario_gs, iva: item.iva };
+    }
+
+    this.sellQuantities = nextQuantities;
+    this.pdfOverrides = nextOverrides;
+    this.unmatchedPdfItems.set(unmatched);
+    this.message.set(
+      unmatched.length
+        ? `Factura aplicada con ${unmatched.length} item(s) sin match. Revise cantidades antes de registrar.`
+        : 'Factura aplicada al formulario. Revise stock y registre la venta.',
+    );
   }
 
   selectedStock(): VentaStockItem | null {
@@ -133,11 +197,11 @@ export class VentasPaquetesPageComponent implements OnInit {
   }
 
   lineTotal(item: VentaStockItem & { cantidad: number }): number {
-    return Number(item.price_gs || 0) * item.cantidad;
+    return this.effectivePrice(item) * item.cantidad;
   }
 
   pendingLineTotal(item: VentaStockItem): number {
-    return Number(item.price_gs || 0) * Number(this.sellQuantities[this.stockKey(item)] || 0);
+    return this.effectivePrice(item) * Number(this.sellQuantities[this.stockKey(item)] || 0);
   }
 
   isOverStock(item: VentaStockItem): boolean {
@@ -152,15 +216,14 @@ export class VentasPaquetesPageComponent implements OnInit {
     return this.invoiceItems().reduce(
       (acc, item) => {
         const lineTotal = this.lineTotal(item);
-        const iva = Number(item.iva || 0);
-        const base = iva > 0 ? lineTotal / (1 + iva / 100) : lineTotal;
-        const ivaMonto = lineTotal - base;
+        const iva = this.effectiveIva(item);
+        const ivaMonto = this.ivaIncludedAmount(lineTotal, iva);
 
         if (iva === 5) {
-          acc.gravada5 += base;
+          acc.gravada5 += lineTotal;
           acc.iva5 += ivaMonto;
         } else if (iva === 10) {
-          acc.gravada10 += base;
+          acc.gravada10 += lineTotal;
           acc.iva10 += ivaMonto;
         }
         return acc;
@@ -172,6 +235,10 @@ export class VentasPaquetesPageComponent implements OnInit {
   totalIva(): number {
     const tax = this.taxSummary();
     return tax.iva5 + tax.iva10;
+  }
+
+  parsedTotalQty(): number {
+    return (this.parsedFactura()?.items || []).reduce((sum, item) => sum + Number(item.cantidad || 0), 0);
   }
 
   onInvoiceNoInput(event: Event): void {
@@ -235,5 +302,55 @@ export class VentasPaquetesPageComponent implements OnInit {
     if (!this.invoice.fecha) return null;
     const date = new Date(`${this.invoice.fecha}T00:00:00`);
     return Number.isNaN(date.getTime()) ? null : date;
+  }
+
+  private ivaIncludedAmount(lineTotal: number, iva: number): number {
+    if (iva === 5) return lineTotal / 21;
+    if (iva === 10) return lineTotal / 11;
+    return 0;
+  }
+
+  effectivePrice(item: VentaStockItem): number {
+    return Number(this.pdfOverrides[this.stockKey(item)]?.price_gs ?? item.price_gs ?? 0);
+  }
+
+  effectiveIva(item: VentaStockItem): number {
+    return Number(this.pdfOverrides[this.stockKey(item)]?.iva ?? item.iva ?? 0);
+  }
+
+  private matchParsedItem(item: FacturaVentaParseItem): VentaStockItem | null {
+    const desc = this.normalizeText(item.descripcion);
+    const grams = this.parsedGramaje(desc);
+    const productKey = this.parsedProductKey(desc);
+    if (!productKey || !grams) return null;
+    return this.options().stock.find((stock) => (
+      this.normalizeText(stock.producto).includes(productKey) &&
+      Number(stock.gramaje) === grams
+    )) || null;
+  }
+
+  private parsedProductKey(desc: string): string {
+    if (desc.includes('azucar')) return 'azucar';
+    if (desc.includes('arroz')) return 'arroz';
+    if (desc.includes('locrillo')) return 'locrillo';
+    if (desc.includes('locro')) return 'locro';
+    if (desc.includes('pororo')) return 'pororo';
+    if (desc.includes('poroto')) return 'poroto';
+    if (desc.includes('gallet')) return 'galleta';
+    return '';
+  }
+
+  private parsedGramaje(desc: string): number | null {
+    const kg = desc.match(/\b1\s*kg\b/);
+    if (kg) return 1000;
+    const gr = desc.match(/\b(\d{2,4})\s*gr?\b/);
+    return gr ? Number(gr[1]) : null;
+  }
+
+  private normalizeText(value: string): string {
+    return String(value || '')
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase();
   }
 }

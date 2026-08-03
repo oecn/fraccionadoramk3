@@ -34,6 +34,21 @@ export type LoteFraccionamientoRow = {
   beneficio_gs: number;
 };
 
+export type LoteVentaBolsaRow = {
+  id: number;
+  fecha: string;
+  bolsas: number;
+  kg_por_bolsa: number;
+  kg_total: number;
+  bolsas_eq: number | null;
+  costo_kg_gs: number;
+  costo_total_gs: number;
+  precio_bolsa_gs: number;
+  total_gs: number;
+  cliente: string;
+  factura: string;
+};
+
 export type RecargoPresentacionRow = {
   gramaje: number;
   kg_por_paquete: number;
@@ -71,4 +86,5 @@ export type LoteDetalle = {
   beneficio_pct: number | null;
   recargos: RecargoPresentacionRow[];
   fraccionamientos: LoteFraccionamientoRow[];
+  ventas_bolsas: LoteVentaBolsaRow[];
 };

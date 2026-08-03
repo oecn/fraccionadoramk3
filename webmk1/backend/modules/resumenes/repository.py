@@ -7,6 +7,7 @@ from core.database import connection
 from modules.resumenes.schemas import (
     LoteDetalle,
     LoteFraccionamientoRow,
+    LoteVentaBolsaRow,
     RecargoPresentacionRow,
     LoteResumenRow,
     ProductoOption,
@@ -125,6 +126,22 @@ class ResumenesRepository:
                 """,
                 (int(lot["product_id"]),),
             ).fetchall()
+            lot_bag_sales_exists = cn.execute("SELECT to_regclass(%s) AS table_name", ("lot_bag_sales",)).fetchone()
+            bag_sales = []
+            if (lot_bag_sales_exists or {}).get("table_name"):
+                bag_sales = cn.execute(
+                    """
+                    SELECT bs.id, bs.ts, bs.bolsas, bs.kg_por_bolsa, lbs.kg_consumidos,
+                           bs.price_bolsa_gs, bs.total_gs,
+                           COALESCE(bs.customer, '') AS customer,
+                           COALESCE(bs.invoice_no, '') AS invoice_no
+                    FROM lot_bag_sales lbs
+                    JOIN bag_sales bs ON bs.id = lbs.bag_sale_id
+                    WHERE lbs.lot_id = %s
+                    ORDER BY bs.ts ASC, lbs.id ASC
+                    """,
+                    (lot_id,),
+                ).fetchall()
 
         producto = lot["producto"] or ""
         bag = _bag_kg(producto)
@@ -153,6 +170,27 @@ class ResumenesRepository:
                     costo_total_gs=costo_linea,
                     precio_venta_gs=price,
                     beneficio_gs=venta_linea,
+                )
+            )
+        ventas_bolsas: list[LoteVentaBolsaRow] = []
+        for row in bag_sales:
+            kg = float(row["kg_consumidos"] or 0)
+            costo_linea = costo_kg * kg
+            venta_estimada += float(row["total_gs"] or 0)
+            ventas_bolsas.append(
+                LoteVentaBolsaRow(
+                    id=int(row["id"]),
+                    fecha=str(row["ts"] or ""),
+                    bolsas=int(row["bolsas"] or 0),
+                    kg_por_bolsa=float(row["kg_por_bolsa"] or 0),
+                    kg_total=kg,
+                    bolsas_eq=(kg / bag) if bag else None,
+                    costo_kg_gs=costo_kg,
+                    costo_total_gs=costo_linea,
+                    precio_bolsa_gs=float(row["price_bolsa_gs"] or 0),
+                    total_gs=float(row["total_gs"] or 0),
+                    cliente=row["customer"] or "",
+                    factura=row["invoice_no"] or "",
                 )
             )
 
@@ -207,6 +245,7 @@ class ResumenesRepository:
             beneficio_pct=(beneficio / compra * 100.0) if compra else None,
             recargos=recargos,
             fraccionamientos=fraccionamientos,
+            ventas_bolsas=ventas_bolsas,
         )
 
     def set_cerrado(self, lot_id: int, cerrado: bool) -> None:

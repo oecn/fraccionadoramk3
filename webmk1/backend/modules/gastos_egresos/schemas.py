@@ -22,11 +22,22 @@ class ExpenseRow(BaseModel):
     referencia_pago: str
 
 
+class FixedExpenseTask(BaseModel):
+    key: str
+    label: str
+    paid: bool
+    total_gs: float = 0
+    count: int = 0
+    last_date: str = ""
+    detail: str = ""
+
+
 class ExpenseSummary(BaseModel):
     rows: list[ExpenseRow]
     total_gs: float
     tipos: list[str]
     formas_pago: list[str]
+    fixed_tasks: list[FixedExpenseTask] = []
 
 
 class CheckStatus(BaseModel):

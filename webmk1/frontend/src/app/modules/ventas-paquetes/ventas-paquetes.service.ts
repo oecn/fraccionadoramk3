@@ -3,7 +3,7 @@ import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 
 import { environment } from '../../../environments/environment';
-import { VentaCreate, VentaOptions, VentaResumen } from './models/ventas-paquetes.models';
+import { FacturaVentaParsePreview, VentaCreate, VentaOptions, VentaResumen } from './models/ventas-paquetes.models';
 
 @Injectable({ providedIn: 'root' })
 export class VentasPaquetesService {
@@ -16,5 +16,11 @@ export class VentasPaquetesService {
 
   registrar(payload: VentaCreate): Observable<VentaResumen> {
     return this.http.post<VentaResumen>(`${this.baseUrl}/ventas-paquetes/facturas`, payload);
+  }
+
+  parseFacturaPdf(file: File): Observable<FacturaVentaParsePreview> {
+    const form = new FormData();
+    form.append('file', file);
+    return this.http.post<FacturaVentaParsePreview>(`${this.baseUrl}/ventas-paquetes/facturas/parse`, form);
   }
 }

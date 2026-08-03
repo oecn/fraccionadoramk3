@@ -10,6 +10,7 @@ from modules.dashboard.schemas import (
     CollectionRow,
     DashboardSummary,
     Kpi,
+    MonthMovementSummary,
     OrderRow,
     OrderDeliveryResponse,
     PaymentCheckOption,
@@ -21,6 +22,7 @@ from modules.dashboard.schemas import (
     PaymentRegisterRequest,
     PaymentRegisterResponse,
     PaymentRow,
+    PriceAlertRow,
 )
 
 
@@ -99,8 +101,17 @@ class DashboardRepository:
                     monto_gs NUMERIC NOT NULL,
                     UNIQUE(collection_id, invoice_id)
                 );
+                CREATE TABLE IF NOT EXISTS bag_collection_items(
+                    id BIGSERIAL PRIMARY KEY,
+                    collection_id BIGINT NOT NULL REFERENCES invoice_collections(id) ON DELETE CASCADE,
+                    bag_sale_id BIGINT NOT NULL REFERENCES bag_sales(id) ON DELETE CASCADE,
+                    monto_gs NUMERIC NOT NULL,
+                    UNIQUE(collection_id, bag_sale_id)
+                );
                 CREATE INDEX IF NOT EXISTS idx_invoice_collection_items_invoice
                     ON invoice_collection_items(invoice_id);
+                CREATE INDEX IF NOT EXISTS idx_bag_collection_items_sale
+                    ON bag_collection_items(bag_sale_id);
                 """
             )
 
@@ -185,9 +196,10 @@ class DashboardRepository:
         return float(total or 0.0) - 0.3 * (float(iva5 or 0.0) + float(iva10 or 0.0))
 
     @staticmethod
-    def _is_collected(cobros: dict[str, bool], invoice_id: int, ts: str, nro: str) -> bool:
-        key_new = f"std:{int(invoice_id)}:{str(ts or '').strip()}:{str(nro or '').strip()}"
-        key_old = f"std:{int(invoice_id)}"
+    def _is_collected(cobros: dict[str, bool], invoice_id: int, ts: str, nro: str, source: str = "sales") -> bool:
+        prefix = "bag" if source == "bag" else "std"
+        key_new = f"{prefix}:{int(invoice_id)}:{str(ts or '').strip()}:{str(nro or '').strip()}"
+        key_old = f"{prefix}:{int(invoice_id)}"
         return bool(cobros.get(key_new, cobros.get(key_old, False)))
 
     def list_sucursales(self) -> list[str]:
@@ -556,8 +568,10 @@ class DashboardRepository:
             if r["status_key"]:
                 out[str(r["status_key"])] = status
             inv_id = int(r["invoice_id"] or 0)
-            out[f"std:{inv_id}:{str(r['invoice_ts'] or '').strip()}:{str(r['invoice_no'] or '').strip()}"] = status
-            out[f"std:{inv_id}"] = status
+            key = str(r["status_key"] or "")
+            prefix = "bag" if key.startswith("bag:") else "std"
+            out[f"{prefix}:{inv_id}:{str(r['invoice_ts'] or '').strip()}:{str(r['invoice_no'] or '').strip()}"] = status
+            out[f"{prefix}:{inv_id}"] = status
         return out
 
     def _build_fracc_stock_cache(self) -> tuple[list[tuple[int, str]], dict[tuple[int, int], int]]:
@@ -712,7 +726,8 @@ class DashboardRepository:
         with connection("fraccionadora") as cn:
             rows = cn.execute(
                 """
-                SELECT si.id, COALESCE(CAST(si.ts AS TEXT),'') AS ts, COALESCE(si.invoice_no,'') AS invoice_no,
+                SELECT si.id, 'sales' AS invoice_source,
+                       COALESCE(CAST(si.ts AS TEXT),'') AS ts, COALESCE(si.invoice_no,'') AS invoice_no,
                        COALESCE(si.customer,'') AS customer, COALESCE(si.gravada5_gs,0) AS gravada5_gs,
                        COALESCE(si.iva5_gs,0) AS iva5_gs, COALESCE(si.gravada10_gs,0) AS gravada10_gs,
                        COALESCE(si.iva10_gs,0) AS iva10_gs, COALESCE(si.total_gs,0) AS total_gs
@@ -727,13 +742,34 @@ class DashboardRepository:
                 """,
                 (like_search, like_search, like_search, from_date.strip(), from_date.strip(), to_date.strip(), to_date.strip()),
             ).fetchall()
+            bag_rows = cn.execute(
+                """
+                SELECT bs.id, 'bag' AS invoice_source,
+                       COALESCE(CAST(bs.ts AS TEXT),'') AS ts, COALESCE(bs.invoice_no,'') AS invoice_no,
+                       COALESCE(bs.customer,'') AS customer, 0 AS gravada5_gs,
+                       0 AS iva5_gs, 0 AS gravada10_gs,
+                       0 AS iva10_gs, COALESCE(bs.total_gs,0) AS total_gs
+                FROM bag_sales bs
+                WHERE (%s = '' OR COALESCE(bs.invoice_no,'') LIKE %s OR COALESCE(bs.customer,'') LIKE %s)
+                  AND (%s = '' OR bs.ts::date >= CAST(NULLIF(%s, '') AS date))
+                  AND (%s = '' OR bs.ts::date <= CAST(NULLIF(%s, '') AS date))
+                  AND NOT EXISTS (
+                    SELECT 1 FROM bag_collection_items bci WHERE bci.bag_sale_id = bs.id
+                  )
+                ORDER BY bs.ts DESC, bs.id DESC;
+                """,
+                (like_search, like_search, like_search, from_date.strip(), from_date.strip(), to_date.strip(), to_date.strip()),
+            ).fetchall()
         today = date.today()
         out: list[CollectionRow] = []
-        for r in rows:
+        all_rows = [dict(r) for r in rows] + [dict(r) for r in bag_rows]
+        all_rows.sort(key=lambda r: (str(r.get("ts") or ""), int(r.get("id") or 0)), reverse=True)
+        for r in all_rows:
             inv_id = self._safe_int(r["id"])
             ts = str(r["ts"] or "")
             nro = str(r["invoice_no"] or "")
-            if inv_id <= 0 or self._is_collected(cobros, inv_id, ts, nro):
+            source = str(r.get("invoice_source") or "sales")
+            if inv_id <= 0 or self._is_collected(cobros, inv_id, ts, nro, source):
                 continue
             fecha = self._parse_iso(ts[:10])
             dias_sin = (today - fecha).days if fecha else None
@@ -744,6 +780,7 @@ class DashboardRepository:
             out.append(
                 CollectionRow(
                     invoice_id=inv_id,
+                    invoice_source=source,
                     ts=ts[:10],
                     invoice_no=nro,
                     customer=str(r["customer"] or ""),
@@ -779,10 +816,101 @@ class DashboardRepository:
             ).fetchone()
         return int(row7["c"] if row7 else 0), int(row30["c"] if row30 else 0)
 
+    def _optional_sum(self, cn, table: str, column: str, from_date: str, to_date: str) -> float:
+        exists = cn.execute("SELECT to_regclass(%s) AS table_name", (table,)).fetchone()
+        if not exists or not exists["table_name"]:
+            return 0.0
+        row = cn.execute(
+            f"""
+            SELECT COALESCE(SUM({column}), 0) AS total
+            FROM {table}
+            WHERE ts::date >= CAST(%s AS date)
+              AND ts::date <= CAST(%s AS date)
+            """,
+            (from_date, to_date),
+        ).fetchone()
+        return float(row["total"] if row else 0.0)
+
+    def month_summary(self) -> MonthMovementSummary:
+        today = date.today()
+        start = today.replace(day=1).isoformat()
+        end = today.isoformat()
+        with connection("fraccionadora") as cn:
+            compras = self._optional_sum(cn, "raw_lots", "costo_total_gs", start, end)
+            ventas = self._optional_sum(cn, "sales_invoices", "total_gs", start, end)
+            ventas += self._optional_sum(cn, "bag_sales", "total_gs", start, end)
+            gastos = self._optional_sum(cn, "expenses", "monto_gs", start, end)
+            notas_credito = self._optional_sum(cn, "credit_notes", "total_gs", start, end)
+        return MonthMovementSummary(
+            compras_gs=compras,
+            ventas_gs=ventas,
+            gastos_gs=gastos,
+            notas_credito_gs=notas_credito,
+            resultado_gs=ventas - compras - gastos - notas_credito,
+        )
+
+    def pending_price_alerts(self, limit: int = 20) -> list[PriceAlertRow]:
+        with connection("fraccionadora") as cn:
+            cn.execute("ALTER TABLE raw_lots ADD COLUMN IF NOT EXISTS precio_cambio_detectado INTEGER NOT NULL DEFAULT 0")
+            cn.execute("ALTER TABLE raw_lots ADD COLUMN IF NOT EXISTS precio_estado TEXT NOT NULL DEFAULT 'Sin cambio'")
+            cn.execute("ALTER TABLE raw_lots ADD COLUMN IF NOT EXISTS precio_revisado INTEGER NOT NULL DEFAULT 0")
+            rows = cn.execute(
+                """
+                SELECT rl.id, rl.product_id, p.name AS producto,
+                       COALESCE(rl.proveedor, '') AS proveedor,
+                       COALESCE(rl.factura, '') AS factura,
+                       COALESCE(rl.precio_estado, 'Pendiente') AS estado,
+                       COALESCE(rl.costo_kg_gs, 0) AS costo_kg_gs,
+                       COALESCE(CAST(rl.ts AS TEXT), '') AS ts
+                FROM raw_lots rl
+                JOIN products p ON p.id = rl.product_id
+                WHERE COALESCE(rl.precio_cambio_detectado, 0) = 1
+                  AND COALESCE(rl.precio_revisado, 0) = 0
+                ORDER BY rl.ts DESC, rl.id DESC
+                LIMIT %s
+                """,
+                (int(limit),),
+            ).fetchall()
+            out: list[PriceAlertRow] = []
+            for r in rows:
+                prev = cn.execute(
+                    """
+                    SELECT costo_kg_gs
+                    FROM raw_lots
+                    WHERE product_id = %s
+                      AND COALESCE(costo_kg_gs, 0) > 0
+                      AND (ts < %s::timestamp OR (ts = %s::timestamp AND id < %s))
+                    ORDER BY ts DESC, id DESC
+                    LIMIT 1
+                    """,
+                    (int(r["product_id"]), str(r["ts"] or ""), str(r["ts"] or ""), int(r["id"])),
+                ).fetchone()
+                prev_cost = float(prev["costo_kg_gs"]) if prev and prev["costo_kg_gs"] is not None else None
+                current = float(r["costo_kg_gs"] or 0)
+                diff = current - float(prev_cost or 0) if prev_cost is not None else 0.0
+                pct = (diff / prev_cost * 100.0) if prev_cost and prev_cost > 0 else None
+                out.append(
+                    PriceAlertRow(
+                        lot_id=int(r["id"]),
+                        product_id=int(r["product_id"]),
+                        producto=r["producto"] or "",
+                        proveedor=r["proveedor"] or "",
+                        factura=r["factura"] or "",
+                        estado=r["estado"] or "Pendiente",
+                        costo_kg_anterior_gs=prev_cost,
+                        costo_kg_gs=current,
+                        diferencia_costo_kg_gs=diff,
+                        variacion_costo_pct=pct,
+                        ts=r["ts"] or "",
+                    )
+                )
+        return out
+
     def summary(self, sucursal: str = "", search: str = "", from_date: str = "", to_date: str = "") -> DashboardSummary:
         orders = self.pending_orders(sucursal, search, from_date, to_date)
         payments = self.pending_payments(sucursal, search, "", "")
         collections = self.pending_collections(search, from_date, to_date)
+        price_alerts = self.pending_price_alerts()
         trend_7, trend_30 = self.trend_data()
         pedidos_vencidos = sum(1 for r in orders if r.dias_atraso is not None and r.dias_atraso > 0)
         pagos_pendientes = sum(float(r.monto or 0.0) for r in payments)
@@ -793,11 +921,14 @@ class DashboardRepository:
                 Kpi(title="Pedidos vencidos", value=str(pedidos_vencidos), subtitle="con atraso"),
                 Kpi(title="Pagos pendientes", value=self._fmt_gs(pagos_pendientes), subtitle="Gs"),
                 Kpi(title="Cobro pendiente", value=self._fmt_gs(cobro_pendiente), subtitle=f"{len(collections)} facturas"),
+                Kpi(title="Precios a revisar", value=str(len(price_alerts)), subtitle="materia prima"),
             ],
             orders=orders,
             payments=payments,
             collections=collections,
+            price_alerts=price_alerts,
             trend_7=trend_7,
             trend_30=trend_30,
+            month_summary=self.month_summary(),
             updated_at=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         )

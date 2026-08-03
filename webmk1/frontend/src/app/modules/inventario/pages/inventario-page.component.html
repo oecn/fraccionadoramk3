@@ -9,6 +9,7 @@
       <strong>{{ fmtNumber(summary().total_raw_kg) }} kg</strong>
       <span>{{ summary().total_paquetes }} paquetes</span>
       <button type="button" class="secondary-action" (click)="openSuggested()">Sugerido de compra</button>
+      <button type="button" class="secondary-action" (click)="openWeeklyCount()">Conteo semanal</button>
       <button type="button" class="primary-action inline" (click)="openAdjustments()">Modificar inventario</button>
     </div>
   </section>
@@ -26,6 +27,11 @@
       <span>Paquetes</span>
       <strong>{{ summary().total_paquetes }}</strong>
       <small>{{ summary().total_unidades }} unidades</small>
+    </article>
+    <article class="metric" [class.alert]="summary().film_alerts_count > 0">
+      <span>FILM</span>
+      <strong>{{ summary().total_film_rollos }}</strong>
+      <small>{{ summary().film_alerts_count > 0 ? 'rollos bajos' : 'rollos en stock' }}</small>
     </article>
     <article class="metric">
       <span>Valor venta</span>
@@ -66,6 +72,7 @@
               <th>Reposicion</th>
               <th class="num">Bolsa 50</th>
               <th class="num">Bolsa 25</th>
+              <th class="num">Conteo proyectado</th>
               <th class="num">Lotes</th>
               <th class="num">Costo prom.</th>
               <th class="num">Valor</th>
@@ -93,12 +100,21 @@
               </td>
               <td class="num">{{ fmtNumber(item.bolsas_50) }}</td>
               <td class="num">{{ fmtNumber(item.bolsas_25) }}</td>
+              <td class="num">
+                <span class="count-diff" [ngClass]="countDiffClass(item)">
+                  <ng-container *ngIf="item.conteo_diferencia_kg !== null; else noCount">
+                    {{ item.conteo_diferencia_kg > 0 ? '+' : '' }}{{ fmtNumber(countDiffBags(item) || 0) }} bolsas
+                    <small>{{ item.conteo_diferencia_kg > 0 ? '+' : '' }}{{ fmtNumber(item.conteo_diferencia_kg) }} kg</small>
+                  </ng-container>
+                  <ng-template #noCount>-</ng-template>
+                </span>
+              </td>
               <td class="num">{{ item.lotes_abiertos }}</td>
               <td class="num">{{ fmtGs(item.costo_promedio_gs) }}</td>
               <td class="num">{{ fmtGs(item.valor_stock_gs) }}</td>
             </tr>
             <tr *ngIf="summary().raw_stock.length === 0">
-              <td colspan="11" class="empty">Sin materia prima.</td>
+              <td colspan="12" class="empty">Sin materia prima.</td>
             </tr>
           </tbody>
         </table>
@@ -117,6 +133,7 @@
               <th class="num">Unidades</th>
               <th class="num">Precio</th>
               <th class="num">IVA</th>
+              <th class="num">Conteo proyectado</th>
               <th class="num">Valor venta</th>
             </tr>
           </thead>
@@ -132,16 +149,74 @@
               <td class="num">{{ item.unidades }}</td>
               <td class="num">{{ item.price_gs == null ? '-' : fmtGs(item.price_gs) }}</td>
               <td class="num">{{ item.iva || '-' }}</td>
+              <td class="num">
+                <span class="count-diff" [ngClass]="packageCountDiffClass(item)">
+                  <ng-container *ngIf="item.conteo_diferencia_paquetes !== null; else noPackageCount">
+                    {{ item.conteo_diferencia_paquetes > 0 ? '+' : '' }}{{ item.conteo_diferencia_paquetes }} paquetes
+                  </ng-container>
+                  <ng-template #noPackageCount>-</ng-template>
+                </span>
+              </td>
               <td class="num">{{ fmtGs(item.valor_venta_gs) }}</td>
             </tr>
             <tr *ngIf="summary().package_stock.length === 0">
-              <td colspan="7" class="empty">Sin paquetes.</td>
+              <td colspan="8" class="empty">Sin paquetes.</td>
             </tr>
           </tbody>
         </table>
       </div>
     </article>
+
   </section>
+
+  <article class="panel film-panel">
+    <header>
+      <strong>FILM</strong>
+      <div class="table-actions">
+        <button type="button" class="secondary-action" (click)="openFilmAlerts()">Definir alertas</button>
+      </div>
+      <span>{{ summary().film_stock.length }} lineas</span>
+    </header>
+    <div class="table-wrap film-table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Presentacion</th>
+            <th>Producto</th>
+            <th class="num">g</th>
+            <th class="num">Rollos</th>
+            <th class="num">Alerta min.</th>
+            <th class="num">Faltan</th>
+            <th>Estado</th>
+            <th>Cobertura %</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let item of summary().film_stock" class="film-row" [ngClass]="item.alerta_estado">
+            <td>{{ item.producto }} {{ item.gramaje }}g</td>
+            <td>
+              <span class="film-trend" [ngClass]="item.alerta_estado">o</span>
+              {{ item.producto }}
+            </td>
+            <td class="num">{{ item.gramaje }}</td>
+            <td class="num">{{ item.rollos }}</td>
+            <td class="num">{{ item.alerta_min_rollos == null ? '-' : item.alerta_min_rollos }}</td>
+            <td class="num">{{ filmMissing(item) }}</td>
+            <td class="num"><strong [ngClass]="item.alerta_estado">{{ alertLabel(item.alerta_estado) }}</strong></td>
+            <td>
+              <div class="film-coverage">
+                <span [style.width.%]="filmCoveragePct(item)"></span>
+                <strong>{{ filmCoveragePct(item) | number:'1.0-0' }}%</strong>
+              </div>
+            </td>
+          </tr>
+          <tr *ngIf="summary().film_stock.length === 0">
+            <td colspan="8" class="empty">Sin FILM.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </article>
 
   <article class="panel">
     <header>Lotes abiertos</header>
@@ -204,6 +279,28 @@
     </div>
   </section>
 
+  <section class="modal-backdrop" *ngIf="filmAlertsOpen()">
+    <div class="alerts-modal">
+      <header>
+        <strong>Alertas de FILM por presentacion</strong>
+        <button type="button" (click)="closeFilmAlerts()">Cerrar</button>
+      </header>
+      <div class="alerts-list film-alerts-list">
+        <label *ngFor="let item of summary().film_stock">
+          <span>{{ item.producto }} {{ item.gramaje }} g</span>
+          <small>Stock: {{ item.rollos }} rollos</small>
+          <input type="number" min="0" step="1" [(ngModel)]="filmAlertForm[filmKey(item)]" placeholder="Rollos min.">
+        </label>
+      </div>
+      <footer>
+        <button type="button" class="secondary-action" (click)="closeFilmAlerts()">Cancelar</button>
+        <button type="button" class="primary-action inline" (click)="saveFilmAlerts()" [disabled]="savingFilmAlerts()">
+          {{ savingFilmAlerts() ? 'Guardando...' : 'Guardar alertas' }}
+        </button>
+      </footer>
+    </div>
+  </section>
+
   <section class="modal-backdrop" *ngIf="adjustmentsOpen()">
     <div class="adjustments-modal">
       <header>
@@ -221,8 +318,12 @@
           <h2>Materia prima</h2>
           <label *ngFor="let item of summary().raw_stock">
             <span>{{ item.producto }}</span>
-            <small>Actual: {{ fmtNumber(item.kg) }} kg</small>
-            <input type="number" min="0" step="0.01" [(ngModel)]="rawAdjustmentForm[item.product_id]">
+            <small>
+              Actual: {{ fmtNumber(currentRawBags(item)) }} bolsas x {{ bagKg(item) }} kg
+              = {{ fmtNumber(item.kg) }} kg
+            </small>
+            <input type="number" min="0" step="0.01" [(ngModel)]="rawAdjustmentForm[item.product_id]" title="Bolsas">
+            <small class="calculated-kg">{{ fmtNumber(adjustedRawKg(item)) }} kg</small>
           </label>
         </section>
         <section>
@@ -233,11 +334,62 @@
             <input type="number" min="0" step="1" [(ngModel)]="packageAdjustmentForm[packageKey(item)]">
           </label>
         </section>
+        <section>
+          <h2>FILM</h2>
+          <label *ngFor="let item of summary().film_stock">
+            <span>{{ item.producto }} {{ item.gramaje }} g</span>
+            <small>Actual: {{ item.rollos }} rollos</small>
+            <input type="number" min="0" step="1" [(ngModel)]="filmAdjustmentForm[filmKey(item)]">
+          </label>
+        </section>
       </div>
       <footer>
         <button type="button" class="secondary-action" (click)="closeAdjustments()">Cancelar</button>
         <button type="button" class="primary-action inline" (click)="saveAdjustments()" [disabled]="savingAdjustments()">
           {{ savingAdjustments() ? 'Guardando...' : 'Guardar inventario' }}
+        </button>
+      </footer>
+    </div>
+  </section>
+
+  <section class="modal-backdrop" *ngIf="weeklyCountOpen()">
+    <div class="adjustments-modal">
+      <header>
+        <strong>Conteo semanal</strong>
+        <button type="button" (click)="closeWeeklyCount()">Cerrar</button>
+      </header>
+      <div class="adjustment-reason">
+        <label>
+          <span>Motivo</span>
+          <input type="text" [(ngModel)]="weeklyCountReason" placeholder="Conteo semanal">
+        </label>
+      </div>
+      <div class="weekly-count-list">
+        <h2>Materia prima</h2>
+        <label *ngFor="let item of summary().raw_stock">
+          <span>{{ item.producto }}</span>
+          <small>Sistema: {{ fmtNumber(currentRawBags(item)) }} bolsas / {{ fmtNumber(item.kg) }} kg</small>
+          <input type="number" min="0" step="0.01" [(ngModel)]="weeklyCountForm[item.product_id]" title="Bolsas en planta">
+          <small>{{ fmtNumber(weeklyCountKg(item)) }} kg planta</small>
+          <strong [class.negative-diff]="weeklyCountDiffKg(item) < 0">
+            Dif: {{ fmtNumber(weeklyCountDiffBags(item)) }} bolsas / {{ fmtNumber(weeklyCountDiffKg(item)) }} kg
+          </strong>
+        </label>
+        <h2>Paquetes</h2>
+        <label *ngFor="let item of summary().package_stock">
+          <span>{{ item.producto }} {{ item.gramaje }} g</span>
+          <small>Sistema: {{ item.paquetes }} paquetes</small>
+          <input type="number" min="0" step="1" [(ngModel)]="weeklyPackageCountForm[packageKey(item)]" title="Paquetes en planta">
+          <small>Planta: {{ fmtNumber(weeklyPackageCount(item), 0) }} paquetes</small>
+          <strong [class.negative-diff]="weeklyPackageCountDiff(item) < 0">
+            Dif: {{ fmtNumber(weeklyPackageCountDiff(item), 0) }} paquetes
+          </strong>
+        </label>
+      </div>
+      <footer>
+        <button type="button" class="secondary-action" (click)="closeWeeklyCount()">Cancelar</button>
+        <button type="button" class="primary-action inline" (click)="saveWeeklyCount()" [disabled]="savingWeeklyCount()">
+          {{ savingWeeklyCount() ? 'Guardando...' : 'Guardar conteo' }}
         </button>
       </footer>
     </div>

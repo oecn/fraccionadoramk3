@@ -17,8 +17,8 @@ http://192.168.10.12:8011/health
 --------------
 Abrir otra terminal PowerShell y ejecutar:
 
-cd C:\Users\osval\Desktop\dev\PDFREADER\GCPDFMK102-POSTGRES\webmk1\frontend
-& "C:\Program Files\nodejs\npm.cmd" run start -- --host 0.0.0.0 --port 4300
+    cd C:\Users\osval\Desktop\dev\PDFREADER\GCPDFMK102-POSTGRES\webmk1\frontend
+    & "C:\Program Files\nodejs\npm.cmd" run start -- --host 0.0.0.0 --port 4300
 
 Abrir navegador:
 http://127.0.0.1:4300

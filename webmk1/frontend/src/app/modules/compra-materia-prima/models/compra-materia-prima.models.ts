@@ -2,6 +2,7 @@ export type ProductoItem = {
   id: number;
   name: string;
   raw_kg: number;
+  ultimo_costo_kg_gs: number | null;
 };
 
 export type RawStockRow = {
@@ -21,6 +22,20 @@ export type LoteAbiertoRow = {
   kg_saldo: number;
   costo_total_gs: number;
   costo_kg_gs: number;
+  gravada5_gs: number;
+  iva5_gs: number;
+  gravada10_gs: number;
+  iva10_gs: number;
+  exenta_gs: number;
+  costo_kg_anterior_gs: number | null;
+  variacion_costo_pct: number | null;
+  precio_cambio_detectado: boolean;
+  precio_estado: string;
+  precio_revisado: boolean;
+  precio_revisado_por: string;
+  precio_revisado_at: string;
+  diferencia_costo_kg_gs: number;
+  diferencia_costo_total_gs: number;
   ts: string;
 };
 
@@ -32,10 +47,12 @@ export type CompraMateriaPrimaOptions = {
 export type CompraMateriaPrimaSummary = {
   raw_stock: RawStockRow[];
   lotes_abiertos: LoteAbiertoRow[];
+  historial_revisiones_precio: LotePrecioReviewHistoryRow[];
 };
 
 export type CompraMateriaPrimaCreate = {
   product_id: number | null;
+  fecha: string;
   lote: string;
   proveedor: string;
   factura: string;
@@ -50,10 +67,17 @@ export type FacturaCompraItem = {
   kg: number;
   precio_unitario: number | null;
   total_linea: number;
+  gravada5_gs: number;
+  iva5_gs: number;
+  gravada10_gs: number;
+  iva10_gs: number;
+  exenta_gs: number;
   product_id: number | null;
   producto: string;
   bolsa_kg: number;
   bolsas: number;
+  costo_kg_anterior_gs: number | null;
+  variacion_costo_pct: number | null;
   importable: boolean;
   message: string;
 };
@@ -75,6 +99,11 @@ export type FacturaCompraImportRequest = {
     descripcion: string;
     kg: number;
     total_linea: number;
+    gravada5_gs: number;
+    iva5_gs: number;
+    gravada10_gs: number;
+    iva10_gs: number;
+    exenta_gs: number;
     bolsa_kg: number;
     bolsas: number;
   }>;
@@ -95,4 +124,32 @@ export type LoteDeleteResponse = {
   deleted: boolean;
   lot_id: number;
   message: string;
+};
+
+export type LotePrecioReviewResponse = {
+  lot_id: number;
+  estado: string;
+  revisado_por: string;
+  revisado_at: string;
+  message: string;
+};
+
+export type LotePrecioReviewRequest = {
+  estado: string;
+  revisado_por: string;
+};
+
+export type LotePrecioReviewHistoryRow = {
+  id: number;
+  lot_id: number;
+  product_id: number;
+  producto: string;
+  estado: string;
+  revisado_por: string;
+  costo_kg_anterior_gs: number | null;
+  costo_kg_gs: number;
+  diferencia_costo_kg_gs: number;
+  variacion_costo_pct: number | null;
+  note: string;
+  created_at: string;
 };

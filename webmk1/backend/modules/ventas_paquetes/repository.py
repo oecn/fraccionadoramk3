@@ -2,11 +2,23 @@ from __future__ import annotations
 
 import datetime as dt
 import re
+import tempfile
 import unicodedata
+from pathlib import Path
+
+from fastapi import UploadFile
 
 from core.google_sheets import append_factura
 from core.database import connection
-from modules.ventas_paquetes.schemas import VentaCreate, VentaOptions, VentaResumen, VentaStockItem
+from modules.ventas_paquetes.factura_venta_parser import parse_factura_venta_pdf
+from modules.ventas_paquetes.schemas import (
+    FacturaVentaParseItem,
+    FacturaVentaParsePreview,
+    VentaCreate,
+    VentaOptions,
+    VentaResumen,
+    VentaStockItem,
+)
 
 
 PRODUCT_ORDER = [
@@ -87,7 +99,49 @@ def _format_invoice_no(value: str) -> str:
     return f"{digits[:3]}-{digits[3:6]}-{digits[6:]}"
 
 
+def _tax_split_included(line_total: float, iva: int) -> tuple[float, float]:
+    if iva == 5:
+        return line_total, line_total / 21.0
+    if iva == 10:
+        return line_total, line_total / 11.0
+    return line_total, 0.0
+
+
 class VentasPaquetesRepository:
+    def parse_factura_pdf(self, upload: UploadFile) -> FacturaVentaParsePreview:
+        filename = upload.filename or ""
+        if not filename.lower().endswith(".pdf"):
+            raise ValueError("Seleccione un archivo PDF.")
+
+        tmp_path = None
+        try:
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
+                tmp.write(upload.file.read())
+                tmp_path = tmp.name
+            parsed = parse_factura_venta_pdf(tmp_path)
+        finally:
+            upload.file.close()
+            if tmp_path:
+                Path(tmp_path).unlink(missing_ok=True)
+
+        return FacturaVentaParsePreview(
+            numero=parsed["numero"],
+            fecha_emision=parsed["fecha_emision"],
+            cliente=parsed["cliente"],
+            ruc_cliente=parsed["ruc_cliente"],
+            condicion_venta=parsed["condicion_venta"],
+            gravada5_gs=parsed["gravada5_gs"],
+            iva5_gs=parsed["iva5_gs"],
+            gravada10_gs=parsed["gravada10_gs"],
+            iva10_gs=parsed["iva10_gs"],
+            total_iva_gs=parsed["total_iva_gs"],
+            total_gs=parsed["total_gs"],
+            items=[
+                FacturaVentaParseItem(linea=idx, **item)
+                for idx, item in enumerate(parsed["items"], start=1)
+            ],
+        )
+
     def options(self) -> VentaOptions:
         with connection("fraccionadora") as cn:
             products = cn.execute("SELECT id, name FROM products ORDER BY name").fetchall()
@@ -190,15 +244,16 @@ class VentasPaquetesRepository:
                         f"Stock insuficiente para {stock['producto']} {item.gramaje} g. "
                         f"Disp: {int(stock['paquetes'] or 0)}, pide: {item.cantidad}."
                     )
-                if stock["price_gs"] is None or int(stock["iva"] or 0) not in (5, 10):
+                price = float(item.price_gs) if item.price_gs is not None else (
+                    float(stock["price_gs"]) if stock["price_gs"] is not None else None
+                )
+                iva = int(item.iva) if item.iva is not None else int(stock["iva"] or 0)
+                if price is None or iva not in (5, 10):
                     faltan_precios.append(f"{stock['producto']} {item.gramaje} g")
                     continue
 
-                price = float(stock["price_gs"])
-                iva = int(stock["iva"])
                 line_total = price * item.cantidad
-                line_base = line_total / (1.0 + iva / 100.0)
-                line_iva = line_total - line_base
+                line_base, line_iva = _tax_split_included(line_total, iva)
                 lineas.append((item.product_id, item.gramaje, item.cantidad, price, iva, line_total, line_base, line_iva))
 
             if faltan_precios:

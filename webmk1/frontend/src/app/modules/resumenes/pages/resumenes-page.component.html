@@ -111,6 +111,10 @@
           Consumo: {{ detail.consumo_pct + detail.merma_pct | number:'1.0-0' }}%
           ({{ fmtKg(detail.kg_usado) }} kg + {{ fmtKg(detail.merma_kg) }} kg merma = {{ fmtKg(detail.kg_usado + detail.merma_kg) }} / {{ fmtKg(detail.kg_total) }} kg)
         </small>
+        <small>
+          Consumo en bolsas: {{ detail.bolsas_usadas === null ? '-' : fmtKg(detail.bolsas_usadas) }}
+          / {{ detail.bolsas_total === null ? '-' : fmtKg(detail.bolsas_total) }} bolsas
+        </small>
       </div>
 
       <section class="markup-box" *ngIf="detail.recargos.length">
@@ -158,6 +162,47 @@
               </tr>
               <tr *ngIf="detail.fraccionamientos.length === 0">
                 <td colspan="9">Sin fraccionamientos asociados.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="history">
+        <h2>Ventas de bolsas de este lote</h2>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Fecha</th>
+                <th class="num">Bolsas</th>
+                <th class="num">Kg bolsa</th>
+                <th class="num">Kg</th>
+                <th class="num">Bolsas eq</th>
+                <th class="num">Costo kg</th>
+                <th class="num">Costo total</th>
+                <th class="num">Precio bolsa</th>
+                <th class="num">Total venta</th>
+                <th>Cliente</th>
+                <th>Factura</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr *ngFor="let row of detail.ventas_bolsas">
+                <td>{{ row.fecha }}</td>
+                <td class="num">{{ row.bolsas }}</td>
+                <td class="num">{{ fmtKg(row.kg_por_bolsa) }}</td>
+                <td class="num">{{ fmtKg(row.kg_total) }}</td>
+                <td class="num">{{ row.bolsas_eq === null ? '-' : fmtKg(row.bolsas_eq) }}</td>
+                <td class="num">{{ fmtGs(row.costo_kg_gs) }}</td>
+                <td class="num">{{ fmtGs(row.costo_total_gs) }}</td>
+                <td class="num">{{ fmtGs(row.precio_bolsa_gs) }}</td>
+                <td class="num">{{ fmtGs(row.total_gs) }}</td>
+                <td>{{ row.cliente || '-' }}</td>
+                <td>{{ row.factura || '-' }}</td>
+              </tr>
+              <tr *ngIf="detail.ventas_bolsas.length === 0">
+                <td colspan="11">Sin ventas de bolsas asociadas.</td>
               </tr>
             </tbody>
           </table>

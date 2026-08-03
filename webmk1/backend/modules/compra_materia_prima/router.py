@@ -11,6 +11,8 @@ from modules.compra_materia_prima.schemas import (
     LoteAbiertoRow,
     LoteDeleteRequest,
     LoteDeleteResponse,
+    LotePrecioReviewRequest,
+    LotePrecioReviewResponse,
 )
 
 
@@ -57,5 +59,13 @@ def import_factura(payload: FacturaCompraImportRequest) -> FacturaCompraImportRe
 def delete_lote(lot_id: int, payload: LoteDeleteRequest) -> LoteDeleteResponse:
     try:
         return CompraMateriaPrimaRepository().delete_lote(lot_id=lot_id, payload=payload)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.patch("/compras/{lot_id}/precio-revisado", response_model=LotePrecioReviewResponse)
+def mark_price_reviewed(lot_id: int, payload: LotePrecioReviewRequest) -> LotePrecioReviewResponse:
+    try:
+        return CompraMateriaPrimaRepository().mark_price_reviewed(lot_id=lot_id, payload=payload)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc

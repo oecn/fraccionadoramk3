@@ -20,6 +20,7 @@ class OrdenCompraImportResponse(BaseModel):
     monto_total: float | None = None
     items: list[OrdenCompraItem]
     message: str
+    created: bool = True
 
 
 class OrdenCompraRow(BaseModel):
